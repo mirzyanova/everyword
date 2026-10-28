@@ -78,10 +78,9 @@ body{background:var(--bg);color:var(--ink)}
 .home-title-lead{font-size:clamp(38px,4.35vw,51px);letter-spacing:-.9px}
 .home-title-tail{font-size:clamp(25px,2.8vw,31px);letter-spacing:-.45px;color:#584638}
 .home-subtitle{max-width:780px;line-height:1.85;font-size:14px;margin:0}
-.home-sun{position:absolute;z-index:-1;right:24px;top:-26px;width:155px;height:150px;pointer-events:none;transform:rotate(-12deg);opacity:.86;
- background:radial-gradient(ellipse at 42% 48%,rgba(238,175,83,.86) 0%,rgba(244,188,96,.7) 36%,rgba(244,188,96,.30) 61%,rgba(244,188,96,0) 83%);
- clip-path:polygon(49% 2%,58% 7%,68% 3%,77% 12%,88% 15%,90% 28%,98% 38%,93% 51%,99% 61%,89% 70%,86% 83%,74% 85%,65% 97%,52% 92%,40% 99%,30% 89%,16% 87%,15% 74%,4% 64%,10% 53%,1% 41%,11% 32%,12% 20%,26% 17%,34% 6%);
- filter:blur(7px)}
+.home-sun{position:absolute;z-index:-1;right:24px;top:-18px;width:156px;height:156px;pointer-events:none;border-radius:50%;opacity:.82;transform:none;
+ background:radial-gradient(circle at center,rgba(240,178,89,.71) 0%,rgba(242,186,99,.56) 27%,rgba(243,192,118,.30) 50%,rgba(246,207,149,.12) 67%,rgba(248,221,182,.035) 77%,rgba(248,221,182,0) 87%);
+ filter:blur(11px)}
 .daily-quote{margin-top:auto;padding:58px 15px 24px;min-height:125px;text-align:center;color:#8a7766;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;gap:12px;font-size:13px;line-height:1.7}
 .daily-quote-mark{color:#d4a469;font-size:14px}
 @media(max-width:740px){
@@ -89,7 +88,7 @@ body{background:var(--bg);color:var(--ink)}
   .home-heading{padding-right:90px;min-height:135px}
   .home-title-lead{font-size:clamp(34px,8.8vw,41px)}
   .home-title-tail{font-size:clamp(24px,6.5vw,29px)}
-  .home-sun{width:110px;height:107px;right:-6px;top:-10px;filter:blur(7px)}
+  .home-sun{width:110px;height:110px;right:-6px;top:-10px;filter:blur(10px)}
   .home-subtitle{width:calc(100% + 90px);font-size:13px}
   .daily-quote{padding-bottom:110px;padding-top:50px}
 }
