@@ -13,3 +13,19 @@ button,.field label,.nav button{font-family:'IBM Plex Sans',system-ui,sans-serif
 .hero-actions .secondary{background:transparent;border-color:#a9c5b0;color:#2d6747}
 .hero-actions .primary,.hero-actions .secondary{min-height:48px}
 @media(max-width:480px){.hero-actions{display:grid;grid-template-columns:1fr;gap:10px}.hero-actions button{width:100%}h1{font-size:32px}.word{font-size:30px}}
+
+/* Everyword editorial refinement, October 2026 */
+body{font-family:'IBM Plex Sans',sans-serif;font-weight:400;line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,.word,.logo,.stat b,.popup b{font-family:'Tenor Sans',sans-serif!important;font-weight:400!important}
+h1{font-size:clamp(29px,3.4vw,39px);letter-spacing:-.65px;line-height:1.26}
+h2{font-size:clamp(23px,2.4vw,27px);letter-spacing:-.28px;line-height:1.34}
+.logo{font-size:27px;line-height:1.25}
+.logo small{font-weight:400!important}
+.primary,.secondary,.yes,.no,.nav button.active,.field label,.eyebrow{font-weight:600}
+.word{font-size:clamp(27px,4.5vw,38px)}
+.stat b{font-size:34px}
+.primary,.secondary,.yes,.no{letter-spacing:.05px}
+.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:22px}
+.hero-actions .secondary{background:#fff;border-color:#cadacb;color:#376c4c}
+.hero-actions button{white-space:nowrap}
+@media(max-width:480px){.hero-actions{display:grid;grid-template-columns:1fr}.hero-actions button{width:100%}h1{font-size:31px}.stat b{font-size:28px}}
