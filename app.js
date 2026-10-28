@@ -1,9 +1,9 @@
-import { createCloudBridge } from './cloud-sync.js?v=20261028-12';
+import { createCloudBridge } from './cloud-sync.js?v=20261028-13';
 import { JOKES } from './jokes.js?v=20261028-11';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261028-12';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
-let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
+let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
 const now=()=>new Date(),id=()=>crypto.randomUUID(),norm=s=>String(s||'').trim().toLocaleLowerCase(),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(x?.cards))return x}catch{}return {cards:[]}}
 function loadGuest(){
@@ -20,21 +20,23 @@ function mergeCardSets(left,right){
     const previous=merged.get(c.id);
     if(!previous||String(c.updatedAt||c.createdAt||'')>String(previous.updatedAt||previous.createdAt||''))merged.set(c.id,c);
   }
-  return {cards:[...merged.values()],practices:[...new Map([...(left?.practices||[]),...(right?.practices||[])].map(p=>[p.id,p])).values()]};
+  const shelves=new Map((left?.shelves||[]).filter(s=>s?.id).map(s=>[s.id,s]));
+  for(const shelf of right?.shelves||[]){const prev=shelves.get(shelf.id);if(!prev||String(shelf.updatedAt)>String(prev.updatedAt))shelves.set(shelf.id,shelf)}
+  return {cards:[...merged.values()],practices:[...new Map([...(left?.practices||[]),...(right?.practices||[])].map(p=>[p.id,p])).values()],shelves:[...shelves.values()]};
 }
 function switchAccount(user){
   const uid=user?.id||null;
   if(uid===accountId)return;
   const previous=accountId;
   if(!previous){try{localStorage.setItem(GUEST_KEY,JSON.stringify(state))}catch(e){console.error(e)}}
-  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;undo=null;modal=null;page='home';search='';
+  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;undo=null;modal=null;page='home';search='';
   if(!uid){state=loadGuest();guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1';render();return}
   let saved=loadAccount(uid);
   const owner=localStorage.getItem(LEGACY_OWNER);
   if(owner===uid)saved=mergeCardSets(saved,load());
   if(!previous){
     const guest=loadGuest();
-    if(guest.cards.length){
+    if(guest.cards.length||(guest.shelves||[]).length){
       saved=mergeCardSets(saved,guest);
       try{localStorage.setItem(GUEST_KEY,JSON.stringify({cards:[]}))}catch(e){console.error(e)}
     }
@@ -61,6 +63,8 @@ function today(){const d=now();return [d.getFullYear(),String(d.getMonth()+1).pa
 function daily(c){return (c.history||[]).filter(x=>x.at.slice(0,10)===today())}
 function activeCards(){return state.cards.filter(c=>!c.deletedAt)}
 function completedPractices(){return Array.isArray(state.practices)?state.practices:[]}
+function shelves(){return Array.isArray(state.shelves)?state.shelves:[]}
+function activeShelves(){return shelves().filter(s=>!s.deletedAt)}
 function streakDays(){
   const unique=new Set(completedPractices().map(p=>p.day));
   const cursor=new Date();cursor.setHours(12,0,0,0);
@@ -86,21 +90,42 @@ function add(ru,en,example='',exampleRu='',note=''){
   state.cards.push({id:id(),ru,en,example,exampleRu,note,createdAt:now().toISOString(),updatedAt:now().toISOString(),fsrs:null,history:[],difficult:false});
   return true;
 }
+function dateOfCard(c){
+ const d=new Date(c.createdAt);
+ if(!Number.isFinite(d.getTime()))return '';
+ return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+}
+function latestAddedGroup(){
+ const all=activeCards();const dates=all.map(dateOfCard).filter(Boolean).sort();
+ if(!dates.length)return {day:null,cards:[]};
+ const day=dates[dates.length-1];
+ return {day,cards:all.filter(c=>dateOfCard(c)===day)};
+}
+function dateLabel(day){
+ if(!day)return 'Пока нет слов';
+ if(day===today())return 'Добавлены сегодня';
+ const [y,m,d]=day.split('-');return 'Последнее пополнение · '+d+'.'+m+'.'+y;
+}
 function currentTask(){return lesson&&!lesson.completed?lesson.tasks[0]:null}
 function current(){const task=currentTask();return task?state.cards.find(c=>c.id===task.id&&!c.deletedAt):null}
-function begin(kind='scheduled'){
-  const cards=activeCards().filter(c=>kind==='hard'?c.difficult:kind==='free'?true:fresh(c)||due(c));
-  lesson=cards.length?makeLesson(cards,kind):null;
-  practice=kind!=='scheduled';sessionRated=0;undo=null;shown=false;flipped=false;page='study';render();
+function begin(kind='new',shelfId=null){
+ const selected=kind==='new'?latestAddedGroup().cards:
+  kind==='hard'?activeCards().filter(c=>c.difficult):
+  kind==='shelf'?activeCards().filter(c=>activeShelves().find(s=>s.id===shelfId)?.cardIds.includes(c.id)):
+  activeCards();
+ lesson=selected.length?makeLesson(selected,kind==='new'?'scheduled':kind==='shelf'?'free':kind):null;
+ if(lesson){lesson.kind=kind;lesson.shelfId=shelfId;lesson.title=kind==='shelf'?activeShelves().find(s=>s.id===shelfId)?.title:null}
+ practice=kind!=='new';sessionRated=0;undo=null;shown=false;flipped=false;page='study';render();
 }
+
 function sidebar(){
-  const menus=[['home','⌂ Главная'],['study','◇ Учить слова'],['library','▤ Мои слова'],['add','＋ Добавить'],['settings','⚙ Настройки']];
+  const menus=[['home','⌂ Главная'],['study','◇ Учить слова'],['library','▤ Мои слова'],['add','＋ Добавить'],['shelves','▦ Полка'],['settings','⚙ Настройки']];
   return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav">'+
     menus.map(([p,t])=>'<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+
     '<div class="nav-account"><button data-page="account" class="'+(page==='account'?'active':'')+'">◎ Аккаунт</button><span class="account-hint">'+(cloud.signedIn?'Вход выполнен':'Войти и сохранить прогресс')+'</span></div></nav></aside>';
 }
 function mobile(){
-  return '<nav class="mobile">'+[['home','⌂ Главная'],['study','◇ Учить'],['library','▤ Слова'],['add','＋ Добавить'],['account','◎ Аккаунт']].map(([p,t])=>
+  return '<nav class="mobile">'+[['home','⌂ Главная'],['study','◇ Учить'],['library','▤ Слова'],['add','＋ Добавить'],['shelves','▦ Полка'],['account','◎ Аккаунт']].map(([p,t])=>
     '<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+'</nav>';
 }
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
@@ -194,6 +219,8 @@ function cloudStatusText(){return ({connected:'Все изменения сох�
 const cloud=createCloudBridge({
   getCards:()=>state.cards,
   getPractices:()=>completedPractices(),
+  getShelves:()=>shelves(),
+  mergeShelves:incoming=>{state.shelves=incoming;save();render()},
   mergePractices:practices=>{state.practices=practices;save();render()},
   mergeCards:cards=>{state.cards=cards;try{if(accountId)localStorage.setItem(USER_PREFIX+accountId,JSON.stringify(state))}catch(e){console.error(e)}render()},
   onIdentity:switchAccount,
