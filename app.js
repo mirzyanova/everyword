@@ -1,4 +1,4 @@
-import { createCloudBridge } from './cloud-sync.js?v=20261028-8';
+import { createCloudBridge } from './cloud-sync.js?v=20261028-12';
 import { JOKES } from './jokes.js?v=20261028-11';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261028-12';
 
