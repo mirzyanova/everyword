@@ -150,3 +150,14 @@ body{background:var(--bg);color:var(--ink)}
 @media(min-width:741px) and (max-width:1040px){
   .nav-account .account-hint{font-size:10px}
 }
+
+
+/* English pronunciation button */
+.word-with-sound{display:flex;align-items:center;justify-content:center;gap:13px;max-width:100%;margin:0 auto}
+.word-with-sound .word{min-width:0;max-width:100%;overflow-wrap:anywhere;text-align:center}
+.speak-button{flex:0 0 43px;width:43px;height:43px;border:1px solid #e1d3c1;border-radius:50%;background:#fffaf2;color:#806247;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:background .16s,border-color .16s,transform .16s}
+.speak-button:hover{background:#f2e5d4;border-color:#d5bea0;transform:translateY(-1px)}
+.speak-button:active{transform:scale(.94)}
+.speak-button:focus-visible{outline:2px solid #c59e72;outline-offset:3px}
+.speak-button svg{display:block}
+@media(max-width:480px){.word-with-sound{gap:9px}.speak-button{flex-basis:41px;width:41px;height:41px}}
