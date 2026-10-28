@@ -200,10 +200,12 @@ const cloud=createCloudBridge({
   onStatus:()=>{if(page==='account'||page==='settings')render()}
 });
 function render(){
-  root.innerHTML='<div class="app">'+sidebar()+'<main class="main">'+({home,study,library,add:addPage,settings,account}[page]||home)()+'</main>'+mobile()+'</div>'+
-  (modal==='guest-invite'?
-    '<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>':
-    modal?'<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+modal+' карточек!</b><h2>Молодец!</h2><p class="muted">Сегодня ты проверила '+modal+' разных слов.</p><button class="primary" data-action="close">Продолжить →</button></div></div>':'');
+ const content=({home,study,library,add:addPage,settings,account}[page]||home)();
+ let popup='';
+ if(editId)popup=cardEditor();
+ else if(modal==='guest-invite')popup='<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>';
+ else if(modal==='congratulations')popup='<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+completedPractices().length+' практики!</b><h2>Так держать!</h2><p class="muted">Ты завершила ещё три занятия. Продолжай в своём ритме!</p><button class="primary" data-action="close">Продолжить →</button></div></div>';
+ root.innerHTML='<div class="app">'+sidebar()+'<main class="main">'+content+'</main>'+mobile()+'</div>'+popup;
 }
 function speakEnglish(text){
   if(!text||!text.trim())return;
@@ -224,10 +226,70 @@ function speakEnglish(text){
     speech.speak(utterance);
   }catch(e){console.error('Everyword pronunciation failed',e);notify('Не удалось озвучить слово.')}
 }
-function flip(){flipped=!flipped;if(flipped)shown=true;render()}
-function skip(){if(queue.length>1){queue.push(queue.shift());flipped=false;shown=false;undo=null;render()}else notify('Это пока единственная карточка')}
-function grade(remembered){if(!shown)return;const c=current();if(!c)return;if(!practice&&!fsrs){notify('FSRS ещё не загрузился. Проверь интернет.');return}const before=checked();undo={card:structuredClone(c),queue:queue.slice()};if(!practice){try{const input=c.fsrs?{...c.fsrs,due:new Date(c.fsrs.due),last_review:c.fsrs.last_review?new Date(c.fsrs.last_review):undefined}:window.fsrsLib.createEmptyCard(new Date(c.createdAt));const result=fsrs.next(input,now(),remembered?rating.Good:rating.Again);c.fsrs={...result.card,due:result.card.due.toISOString(),last_review:result.card.last_review?.toISOString()||null}}catch(e){console.error(e);notify('Не удалось обновить FSRS. Оценка не сохранена.');return}}c.history.push({at:now().toISOString(),remembered,practice});c.updatedAt=now().toISOString();sessionRated++;queue.shift();flipped=false;shown=false;save();refill();const after=checked();if(Math.floor(after/10)>Math.floor(before/10))modal=after;else if(!queue.length)maybeInviteAfterLesson();render()}
-function doUndo(){if(!undo)return;const i=state.cards.findIndex(c=>c.id===undo.card.id);if(i>=0)state.cards[i]=undo.card;queue=undo.queue;shown=true;flipped=true;undo=null;modal=null;save();render()}
+function flip(){if(!currentTask())return;flipped=!flipped;if(flipped)shown=true;render()}
+function skip(){if(skipLesson(lesson)){flipped=false;shown=false;undo=null;render()}else notify('Это единственная оставшаяся карточка')}
+function scheduleFSRS(c,remembered){
+ if(!fsrs)return;
+ try{
+  const input=c.fsrs?{...c.fsrs,due:new Date(c.fsrs.due),last_review:c.fsrs.last_review?new Date(c.fsrs.last_review):undefined}:window.fsrsLib.createEmptyCard(new Date(c.createdAt));
+  const result=fsrs.next(input,now(),remembered?rating.Good:rating.Again);
+  c.fsrs={...result.card,due:result.card.due.toISOString(),last_review:result.card.last_review?.toISOString()||null};
+ }catch(e){console.error('FSRS error',e);notify('Не удалось пересчитать интервалы повторения')}
+}
+function finishLesson(){
+ if(!lesson||!lesson.completed)return;
+ if(lesson.kind==='scheduled'){
+   for(const id of lesson.cardIds){
+     const c=state.cards.find(x=>x.id===id&&!x.deletedAt);
+     const record=lesson.records[id];
+     if(c&&record)scheduleFSRS(c,record.ru.first===true&&record.en.first===true);
+     if(c)c.updatedAt=now().toISOString();
+   }
+ }
+ if(!Array.isArray(state.practices))state.practices=[];
+ state.practices.push({id:id(),day:today(),kind:lesson.kind,at:now().toISOString()});
+ save();
+ const count=completedPractices().length;
+ if(count%3===0)modal='congratulations';
+ else maybeInviteAfterLesson();
+}
+function grade(remembered){
+ if(!shown||!currentTask()||!lesson)return;
+ if(lesson.kind==='scheduled'&&!fsrs){notify('FSRS пока не загрузился. Проверь интернет.');return}
+ const c=current();if(!c)return;
+ undo={card:structuredClone(c),lesson:structuredClone(lesson)};
+ const result=answerLesson(lesson,remembered);
+ if(!result)return;
+ c.history.push({at:now().toISOString(),remembered,practice:lesson.kind!=='scheduled',direction:result.task.side,lessonKind:lesson.kind});
+ if(result.newlyHard)c.difficult=true;
+ c.updatedAt=now().toISOString();
+ sessionRated++;
+ shown=false;flipped=false;
+ if(result.finished){undo=null;finishLesson();}
+ else save();
+ render();
+}
+function doUndo(){
+ if(!undo||!lesson||lesson.completed)return;
+ const i=state.cards.findIndex(c=>c.id===undo.card.id);
+ if(i>=0)state.cards[i]=undo.card;
+ lesson=undo.lesson;shown=true;flipped=true;undo=null;modal=null;
+ save();render();
+}
+function cardEditor(){
+ const c=state.cards.find(x=>x.id===editId&&!x.deletedAt);
+ if(!c)return '';
+ return '<div class="overlay" role="presentation"><section class="popup edit-popup" role="dialog" aria-modal="true" aria-label="Редактировать карточку"><div class="row"><h2>Редактировать карточку</h2><button class="edit-close" type="button" data-action="edit-close" aria-label="Закрыть">×</button></div>'+
+ '<form id="card-editor"><div class="field"><label>Русский смысл *</label><textarea name="ru" required>'+safe(c.ru)+'</textarea></div>'+
+ '<div class="field"><label>Английский перевод *</label><input name="en" required value="'+safe(c.en)+'"></div>'+
+ '<div class="field"><label>Пример на английском</label><textarea name="example">'+safe(c.example||'')+'</textarea></div>'+
+ '<div class="field"><label>Перевод примера</label><textarea name="exampleRu">'+safe(c.exampleRu||'')+'</textarea></div>'+
+ '<div class="field"><label>Пояснение / контекст</label><textarea name="note">'+safe(c.note||'')+'</textarea></div>'+
+ '<label class="edit-difficult"><input type="checkbox" name="difficult" '+(c.difficult?'checked':'')+'> Считать сложным словом</label>'+
+ '<div class="edit-actions"><button class="primary" type="submit">Сохранить изменения</button><button class="secondary" type="button" data-action="edit-close">Отмена</button></div></form>'+
+ (deleteConfirm?'<div class="delete-confirm"><p>Удалить слово из коллекции? Оно больше не появится в занятиях на твоих устройствах.</p><button class="delete-button" type="button" data-action="delete-card">Да, удалить карточку</button><button class="link" type="button" data-action="cancel-delete">Оставить</button></div>':'<button class="delete-link" type="button" data-action="ask-delete">Удалить карточку</button>')+
+ '</section></div>';
+}
 async function importData(file){if(!file)return;try{const x=JSON.parse(await file.text());if(!Array.isArray(x.cards))throw Error('Wrong format');const ids=new Set(state.cards.map(c=>c.id));let n=0;for(const c of x.cards){if(c.id&&c.ru&&c.en&&Array.isArray(c.history)&&!ids.has(c.id)){state.cards.push(c);ids.add(c.id);n++}}save();render();notify('Импортировано карточек: '+n)}catch{notify('Не удалось импортировать файл')}}
 const examples=[['Разобраться, выяснить','figure out','I need to figure out what happened.','Мне нужно разобраться, что произошло.'],['Тем не менее','nevertheless','Nevertheless, I decided to go.','Тем не менее я решила пойти.'],['В итоге, со временем','eventually','Eventually, everything worked out.','В итоге всё получилось.'],['Случайно встретить','run into','I ran into an old friend.','Я случайно встретила старого друга.'],['Ладить с кем-то','get along with','I get along with my team.','Я хорошо лажу со своей командой.'],['Принимать как должное','take for granted',"Don't take it for granted.",'Не воспринимай это как должное.']];
 document.addEventListener('click',e=>{const b=e.target.closest('[data-page],[data-action]');if(!b)return;if(b.dataset.page){const dest=b.dataset.page;if(page==='study'&&dest!=='study'&&dest!=='account')maybeInviteAfterLesson();page=dest;if(page==='study'&&!queue.length){practice=false;queue=interleave();sessionRated=0}render();return}const a=b.dataset.action;if(a==='begin')begin();else if(a==='practice')begin(true);else if(a==='next-joke'){jokeOfVisit=drawJoke();render()}else if(a==='samples'){examples.forEach(x=>add(...x));save();render();notify('Добавлено 6 примеров')}else if(a==='flip')flip();else if(a==='speak'){e.stopPropagation();speakEnglish(current()?.en||'')}else if(a==='skip')skip();else if(a==='yes')grade(true);else if(a==='no')grade(false);else if(a==='undo')doUndo();else if(a==='cloud-refresh')cloud.refresh().then(()=>notify('Облако проверено')).catch(()=>notify('Ошибка обновления'));else if(a==='cloud-signout')cloud.signOut().then(()=>{render();notify('Выход выполнен')}).catch(()=>notify('Не удалось выйти из аккаунта'));else if(a==='invite-login'){modal=null;page='account';render()}else if(a==='invite-later'){modal=null;render()}else if(a==='close'){modal=null;render()}else if(a==='export'){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download='everyword-backup-'+today()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(u),500)}else if(a==='edit'){const c=state.cards.find(x=>x.id===b.dataset.id);if(!c)return;const ru=prompt('Русский смысл',c.ru);if(ru===null)return;const en=prompt('Английское выражение',c.en);if(en===null)return;if(!ru.trim()||!en.trim()){notify('Оба поля обязательны');return}c.ru=ru.trim();c.en=en.trim();c.updatedAt=now().toISOString();save();render();notify('Карточка обновлена')}});
