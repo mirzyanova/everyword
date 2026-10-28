@@ -118,3 +118,35 @@ body{background:var(--bg);color:var(--ink)}
  .auth-symbol{width:97px;height:97px;right:12px;top:22px}
  .auth-title{font-size:35px}
 }
+
+
+/* Guest-first Everyword */
+.side{display:flex;flex-direction:column}
+.side .nav{display:flex;flex-direction:column;flex:1}
+.nav-account{margin-top:auto;border-top:1px solid #e8ddcf;padding-top:19px}
+.nav-account button{font-weight:600;color:#77563b}
+.nav-account .account-hint{display:block;color:#9b8b7a;font-size:11px;line-height:1.4;margin:2px 15px 0;max-width:186px}
+.account-panel{margin-top:27px;max-width:690px;padding:clamp(26px,4.6vw,39px)}
+.account-panel h2{font-size:clamp(23px,3vw,29px);overflow-wrap:anywhere}
+.account-panel>.muted{max-width:530px;font-size:14px}
+.account-login{display:flex;flex-direction:column;max-width:440px;margin-top:25px}
+.account-login .field label{font-weight:500}
+.account-login button{align-self:flex-start;min-height:49px}
+.account-message{margin-top:20px;background:#f7eee2;border:1px solid #e5d2b9;color:#765639;padding:14px 17px;border-radius:12px;font-size:13px;line-height:1.7}
+.account-small{margin-top:24px;font-size:12px!important}
+.popup-invite{text-align:left;max-width:440px;padding:36px}
+.popup-invite h2{font-family:'Tenor Sans','IBM Plex Sans',sans-serif;font-size:27px;font-weight:400;margin:15px 0}
+.popup-invite .muted{font-size:14px;line-height:1.8}
+.invite-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:25px}
+.invite-actions button{flex:1;min-width:170px;padding:13px}
+@media(max-width:740px){
+  .side{display:none}
+  .mobile{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .mobile button{font-size:11px;padding:9px 2px;min-width:0;white-space:nowrap}
+  .popup-invite{padding:28px}
+  .invite-actions{flex-direction:column}
+  .invite-actions button{min-height:46px}
+}
+@media(min-width:741px) and (max-width:1040px){
+  .nav-account .account-hint{font-size:10px}
+}
