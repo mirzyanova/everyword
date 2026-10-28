@@ -186,3 +186,40 @@ body{background:var(--bg);color:var(--ink)}
   .joke-footer{padding:49px 10px 118px}
   .joke-body{font-size:13px;line-height:1.8}
 }
+
+
+/* Everyword V2: two-way lessons, review streak and full card editor */
+.stats-four{grid-template-columns:repeat(4,minmax(0,1fr))}
+.stats-four .stat{min-width:0;padding:23px 19px}
+.stats-four .stat b{font-family:'Tenor Sans','IBM Plex Sans',sans-serif;font-weight:400}
+.stats-four .stat span{line-height:1.55}
+.hero-actions button{white-space:normal}
+.hero-actions button:disabled{opacity:.56;cursor:not-allowed}
+.study .pill{font-size:12px}
+.study-finished{margin-top:28px;text-align:center;padding:40px 25px}
+.study-finished .stack{justify-content:center}
+.edit-popup{width:min(100%,620px);max-width:620px;max-height:min(89vh,850px);overflow-y:auto;text-align:left;padding:30px clamp(20px,4vw,38px);background:#fffaf4}
+.edit-popup .row{align-items:flex-start;margin-bottom:15px}
+.edit-popup h2{font-family:'Tenor Sans','IBM Plex Sans',sans-serif;font-size:25px;font-weight:400;margin:3px 0 0}
+.edit-close{flex:0 0 35px;width:35px;height:35px;border:0;background:transparent;font-size:28px;font-weight:300;color:#8a7b6e;line-height:1}
+.edit-popup .field{margin-bottom:13px}
+.edit-popup .field label{font-weight:600;color:#766454}
+.edit-popup .field textarea{min-height:72px}
+.edit-popup .field input{min-height:45px}
+.edit-popup .edit-difficult{display:flex;align-items:center;gap:10px;font-size:13px;color:#6b5541;margin:17px 0 20px;cursor:pointer}
+.edit-difficult input{width:16px;height:16px;accent-color:#80644b}
+.edit-actions{display:flex;gap:10px;flex-wrap:wrap}
+.edit-actions button{flex:1;min-height:45px}
+.delete-link{border:0;background:none;text-decoration:underline;text-underline-offset:3px;color:#a45e57;font-size:12px;padding:8px 0;margin-top:20px}
+.delete-confirm{border-top:1px solid #e7d7c8;margin-top:23px;padding-top:15px}
+.delete-confirm p{font-size:13px;line-height:1.65;color:#805c53}
+.delete-button{border:1px solid #ddada6;border-radius:11px;background:#a95e56;padding:12px 17px;color:#fff;font-weight:600}
+.delete-confirm .link{margin-left:6px}
+@media(max-width:1050px){.stats-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:740px){
+ .stats-four{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+ .stats-four .stat{padding:17px 14px}
+ .edit-popup{max-height:87dvh;padding:25px 21px}
+ .edit-popup .field textarea{min-height:65px}
+ .edit-popup h2{font-size:23px}
+}
