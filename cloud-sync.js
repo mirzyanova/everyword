@@ -34,7 +34,7 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
     for (let from = 0; ; from += 500) {
       const { data, error } = await client.from('everyword_cards')
         .select('id,payload,updated_at').eq('user_id', user.id)
-        .order('created_at', { ascending: true }).range(from, from + 499);
+        .order('updated_at', { ascending: true }).range(from, from + 499);
       if (error) throw error;
       out.push(...(data || []));
       if (!data || data.length < 500) break;
