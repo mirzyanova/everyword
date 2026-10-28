@@ -93,3 +93,28 @@ body{background:var(--bg);color:var(--ink)}
   .daily-quote{padding-bottom:110px;padding-top:50px}
 }
 @media(prefers-reduced-motion:reduce){.home-sun{transform:none}}
+
+
+/* Everyword login-first auth */
+.auth-page{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;background:var(--bg);padding:36px 18px}
+.auth-shell{width:min(100%,560px);position:relative;isolation:isolate;border:1px solid #ece0d2;background:#fffaf3;border-radius:30px;padding:48px clamp(26px,5vw,58px) 38px;box-shadow:0 22px 80px rgba(89,61,37,.055);overflow:hidden}
+.auth-symbol{position:absolute;z-index:-1;top:24px;right:27px;width:123px;height:123px;border-radius:50%;background:radial-gradient(circle,rgba(237,168,79,.56) 0%,rgba(241,181,93,.30) 43%,rgba(246,204,147,.09) 68%,transparent 87%);filter:blur(12px);pointer-events:none}
+.auth-logo{font:400 27px/1.15 'Tenor Sans','IBM Plex Sans',sans-serif;letter-spacing:-.5px;color:#694f3d;margin-bottom:47px}
+.auth-logo small{display:block;font:500 9px/1.9 'IBM Plex Sans',sans-serif;letter-spacing:2.2px;color:#a5978b;margin-top:5px}
+.auth-title{font:400 clamp(33px,5.5vw,44px)/1.17 'Tenor Sans','IBM Plex Sans',sans-serif!important;letter-spacing:-.7px!important;color:#332920;margin:11px 0 17px}
+.auth-title span{display:block;font:400 .69em/1.5 'Tenor Sans','IBM Plex Sans',sans-serif;letter-spacing:-.2px;color:#66503e}
+.auth-intro{font-size:14px;line-height:1.85;color:#7b7167;margin:0 0 30px;max-width:420px}
+.auth-form{display:flex;flex-direction:column;align-items:stretch;gap:11px}
+.auth-form label{font-size:12px;font-weight:600;color:#6c5949}
+.auth-form input{width:100%;height:49px;box-sizing:border-box;border:1px solid #e2d5c5;border-radius:12px;background:#fffdf9;color:#302b25;padding:0 16px;font:400 15px 'IBM Plex Sans',sans-serif;outline-color:#cdaa81}
+.auth-form .primary{width:100%;min-height:51px;margin-top:7px;font-size:13px}
+.auth-notice{border:1px solid #e5d7c7;border-radius:12px;padding:13px 15px;font-size:13px;line-height:1.65;color:#684d37;background:#f8efe4;margin:20px 0 0}
+.auth-loader{font-size:13px;line-height:1.7;color:#947f65;padding:15px 0 28px}
+.auth-footnote{margin:27px 0 0;color:#a29587;font-size:12px;line-height:1.7}
+@media(max-width:600px){
+ .auth-page{padding:13px}
+ .auth-shell{padding:35px 27px 31px;border-radius:23px}
+ .auth-logo{margin-bottom:39px}
+ .auth-symbol{width:97px;height:97px;right:12px;top:22px}
+ .auth-title{font-size:35px}
+}
