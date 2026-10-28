@@ -12,9 +12,9 @@ const validCard = c => c && typeof c.id === 'string' &&
   typeof c.ru === 'string' && typeof c.en === 'string' &&
   Array.isArray(c.history);
 
-export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }) {
+export function createCloudBridge({ getCards, mergeCards, getPractices, mergePractices, onStatus, onIdentity }) {
   let client = null, user = null, ready = false, syncing = false, pending = false;
-  let snapshots = new Map(), saveTimer = null, status = configured ? 'connecting' : 'unconfigured';
+  let snapshots = new Map(), practiceSnapshots = new Set(), saveTimer = null, status = configured ? 'connecting' : 'unconfigured';
   const setStatus = s => { status = s; onStatus?.(s, user); };
   const api = {
     get configured() { return configured; },
@@ -42,6 +42,33 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     }
     return out;
   }
+  async function listPractices(accountId){
+    const records=[];
+    for(let from=0;;from+=500){
+      const {data,error}=await client.from('everyword_practices')
+        .select('id,local_day,kind,completed_at').eq('user_id',accountId)
+        .order('completed_at',{ascending:true}).range(from,from+499);
+      if(error)throw error;
+      records.push(...(data||[]));
+      if(!data||data.length<500)break;
+    }
+    return records.map(row=>({id:row.id,day:row.local_day,kind:row.kind,at:row.completed_at}));
+  }
+  async function uploadPractices(practices,accountId){
+    for(let i=0;i<practices.length;i+=100){
+      if(user?.id!==accountId)return;
+      const slice=practices.slice(i,i+100);
+      const rows=slice.map(p=>({id:p.id,user_id:accountId,local_day:p.day,kind:p.kind,completed_at:p.at}));
+      const {error}=await client.from('everyword_practices').upsert(rows,{onConflict:'id',ignoreDuplicates:true});
+      if(error)throw error;
+      slice.forEach(p=>practiceSnapshots.add(p.id));
+    }
+  }
+  function unionPractices(remote,local){
+    const all=new Map(remote.map(p=>[p.id,p]));
+    for(const p of local)if(p&&p.id&&!all.has(p.id))all.set(p.id,p);
+    return [...all.values()].sort((a,b)=>String(a.at).localeCompare(String(b.at)));
+  }
   async function upload(cards, accountId) {
     if (!cards.length) return;
     for (let i = 0; i < cards.length; i += 100) {
@@ -62,9 +89,10 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     syncing = true;
     setStatus('syncing');
     try {
-      const remote = await listRemote(accountId);
+      const [remote,remotePractices] = await Promise.all([listRemote(accountId),listPractices(accountId)]);
       if (user?.id !== accountId) return;
       const local = getCards().filter(validCard);
+      const localPractices=(getPractices?.()||[]).filter(p=>p&&p.id&&p.day&&p.kind&&p.at);
       const remoteMap = new Map(remote.map(x => [x.id, x]));
       const combined = new Map();
       const toUpload = [];
@@ -82,7 +110,10 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
         }
       }
       mergeCards(Array.from(combined.values()));
+      mergePractices?.(unionPractices(remotePractices,localPractices));
+      remotePractices.forEach(p=>practiceSnapshots.add(p.id));
       await upload(toUpload, accountId);
+      await uploadPractices(localPractices.filter(p=>!practiceSnapshots.has(p.id)),accountId);
       if (user?.id !== accountId) return;
       ready = true;
       setStatus('connected');
@@ -98,7 +129,9 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     setStatus('syncing');
     try {
       const changed = getCards().filter(validCard).filter(c => snapshots.get(c.id) !== cardJSON(c));
+      const practiceChanges=(getPractices?.()||[]).filter(p=>p?.id&&!practiceSnapshots.has(p.id));
       await upload(changed, accountId);
+      await uploadPractices(practiceChanges,accountId);
       if (user?.id !== accountId) return;
       setStatus('connected');
     } catch (e) {
@@ -116,7 +149,7 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     const accountId = user.id;
     syncing = true;
     try {
-      const remote = await listRemote(accountId);
+      const [remote,remotePractices] = await Promise.all([listRemote(accountId),listPractices(accountId)]);
       if (user?.id !== accountId) return;
       const current = new Map(getCards().map(c => [c.id, c]));
       let changed = false;
@@ -133,6 +166,10 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
         snapshots.set(c.id, cardJSON(c));
       }
       if (changed) mergeCards(Array.from(current.values()));
+      const localPractices=getPractices?.()||[];
+      const union=unionPractices(remotePractices,localPractices);
+      if(union.length!==localPractices.length)mergePractices?.(union);
+      remotePractices.forEach(p=>practiceSnapshots.add(p.id));
       setStatus('connected');
     } catch (e) {
       console.error('Everyword cloud refresh failed', e);
@@ -159,6 +196,7 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     user = nextUser;
     ready = false;
     snapshots.clear();
+    practiceSnapshots.clear();
     clearTimeout(saveTimer);
     onIdentity?.(user);
     return true;
