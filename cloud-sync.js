@@ -12,7 +12,7 @@ const validCard = c => c && typeof c.id === 'string' &&
   typeof c.ru === 'string' && typeof c.en === 'string' &&
   Array.isArray(c.history);
 
-export function createCloudBridge({ getCards, mergeCards, onStatus }) {
+export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }) {
   let client = null, user = null, ready = false, syncing = false, pending = false;
   let snapshots = new Map(), saveTimer = null, status = configured ? 'connecting' : 'unconfigured';
   const setStatus = s => { status = s; onStatus?.(s, user); };
@@ -20,7 +20,8 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
     get configured() { return configured; },
     get status() { return status; },
     get email() { return user?.email || ''; },
-    get signedIn() { return !!user; }
+    get signedIn() { return !!user; },
+    get ready() { return ready; }
   };
   async function loadLibrary() {
     if (!configured || client) return;
@@ -29,11 +30,11 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
       auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
     });
   }
-  async function listRemote() {
+  async function listRemote(accountId) {
     let out = [];
     for (let from = 0; ; from += 500) {
       const { data, error } = await client.from('everyword_cards')
-        .select('id,payload,updated_at').eq('user_id', user.id)
+        .select('id,payload,updated_at').eq('user_id', accountId)
         .order('updated_at', { ascending: true }).range(from, from + 499);
       if (error) throw error;
       out.push(...(data || []));
@@ -41,12 +42,13 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
     }
     return out;
   }
-  async function upload(cards) {
+  async function upload(cards, accountId) {
     if (!cards.length) return;
     for (let i = 0; i < cards.length; i += 100) {
       const batch = cards.slice(i, i + 100);
+      if (user?.id !== accountId) return;
       const rows = batch.map(c => ({
-        id: c.id, user_id: user.id, payload: c,
+        id: c.id, user_id: accountId, payload: c,
         updated_at: new Date().toISOString()
       }));
       const { error } = await client.from('everyword_cards').upsert(rows, { onConflict: 'id' });
@@ -56,10 +58,12 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
   }
   async function initialSync() {
     if (!user || syncing) return;
+    const accountId = user.id;
     syncing = true;
     setStatus('syncing');
     try {
-      const remote = await listRemote();
+      const remote = await listRemote(accountId);
+      if (user?.id !== accountId) return;
       const local = getCards().filter(validCard);
       const remoteMap = new Map(remote.map(x => [x.id, x]));
       const combined = new Map();
@@ -78,7 +82,8 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
         }
       }
       mergeCards(Array.from(combined.values()));
-      await upload(toUpload);
+      await upload(toUpload, accountId);
+      if (user?.id !== accountId) return;
       ready = true;
       setStatus('connected');
     } catch (e) {
@@ -88,11 +93,13 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
   }
   async function flush() {
     if (!ready || !user || syncing) { pending = true; return; }
+    const accountId = user.id;
     syncing = true;
     setStatus('syncing');
     try {
       const changed = getCards().filter(validCard).filter(c => snapshots.get(c.id) !== cardJSON(c));
-      await upload(changed);
+      await upload(changed, accountId);
+      if (user?.id !== accountId) return;
       setStatus('connected');
     } catch (e) {
       console.error('Everyword cloud upload failed', e);
@@ -106,9 +113,11 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
     if (!ready || !user || syncing) return;
     await flush();
     if (syncing || status === 'error') return;
+    const accountId = user.id;
     syncing = true;
     try {
-      const remote = await listRemote();
+      const remote = await listRemote(accountId);
+      if (user?.id !== accountId) return;
       const current = new Map(getCards().map(c => [c.id, c]));
       let changed = false;
       for (const row of remote) {
@@ -145,28 +154,44 @@ export function createCloudBridge({ getCards, mergeCards, onStatus }) {
     if (error) throw error;
     setStatus('email-sent');
   };
+  function setIdentity(nextUser) {
+    if (user?.id === nextUser?.id) { user = nextUser; return false; }
+    user = nextUser;
+    ready = false;
+    snapshots.clear();
+    clearTimeout(saveTimer);
+    onIdentity?.(user);
+    return true;
+  }
   api.signOut = async function() {
-    if (client) await client.auth.signOut();
-    user = null; ready = false; snapshots.clear();
+    if (client) {
+      const { error } = await client.auth.signOut();
+      if (error) throw error;
+    }
+    setIdentity(null);
     setStatus('signed-out');
   };
   api.init = async function() {
     if (!configured) return setStatus('unconfigured');
     try {
       await loadLibrary();
-      const { data: { user: currentUser }, error } = await client.auth.getUser();
-      if (error && error.name !== 'AuthSessionMissingError') throw error;
-      user = currentUser;
-      if (user) await initialSync();
-      else setStatus('signed-out');
       client.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_IN' && session?.user && session.user.id !== user?.id) {
-          user = session.user;
-          setTimeout(initialSync, 0);
+        if (event === 'SIGNED_IN' && session?.user) {
+          if (setIdentity(session.user)) setTimeout(initialSync, 0);
         } else if (event === 'SIGNED_OUT') {
-          user = null; ready = false; snapshots.clear(); setStatus('signed-out');
+          setIdentity(null);
+          setStatus('signed-out');
         }
       });
+      const { data: { user: currentUser }, error } = await client.auth.getUser();
+      if (error && error.name !== 'AuthSessionMissingError') throw error;
+      if (currentUser) {
+        setIdentity(currentUser);
+        if (!ready) await initialSync();
+      } else if (!user) {
+        setIdentity(null);
+        setStatus('signed-out');
+      }
     } catch (e) {
       console.error('Everyword cloud initialization failed', e);
       setStatus('error');
