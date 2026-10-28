@@ -367,15 +367,22 @@ document.addEventListener('click',e=>{
  if(b.dataset.page){
    const dest=b.dataset.page;
    if(dest==='study'){
-     if(!lesson||lesson.completed)begin('scheduled');
+     if(!lesson||lesson.completed)begin('new');
      else {page='study';render()}
    }else{page=dest;render()}
    return;
  }
  const a=b.dataset.action;
- if(a==='begin')begin('scheduled');
+ if(a==='begin')begin('new');
  else if(a==='practice')begin('free');
  else if(a==='hard')begin('hard');
+ else if(a==='shelf-start'){const sh=activeShelves().find(x=>x.id===b.dataset.id);if(sh)begin('shelf',sh.id)}
+ else if(a==='shelf-new')openShelfEditor();
+ else if(a==='shelf-edit'){const sh=activeShelves().find(x=>x.id===b.dataset.id);if(sh)openShelfEditor(sh)}
+ else if(a==='shelf-close'){shelfEditId=null;shelfDraft=null;shelfDeleteConfirm=false;render()}
+ else if(a==='shelf-ask-delete'){shelfDeleteConfirm=true;render()}
+ else if(a==='shelf-cancel-delete'){shelfDeleteConfirm=false;render()}
+ else if(a==='shelf-delete'){const sh=activeShelves().find(x=>x.id===shelfEditId);if(sh){sh.deletedAt=now().toISOString();sh.updatedAt=sh.deletedAt;save()}shelfEditId=null;shelfDraft=null;shelfDeleteConfirm=false;render();notify('Полка удалена. Слова остались в коллекции')}
  else if(a==='next-joke'){jokeOfVisit=drawJoke();render()}
  else if(a==='samples'){examples.forEach(x=>add(...x));save();render();notify('Добавлено 6 примеров')}
  else if(a==='flip')flip();
@@ -436,6 +443,23 @@ document.addEventListener('submit',e=>{
    save();editId=null;deleteConfirm=false;render();notify('Карточка обновлена');
    return;
  }
+ if(e.target.id==='shelf-editor'){
+   e.preventDefault();
+   if(!shelfDraft)return;
+   const data=new FormData(e.target);
+   const title=String(data.get('title')||'').trim(),description=String(data.get('description')||'').trim();
+   if(!title){notify('Укажи название полки');return}
+   const existing=activeShelves().find(x=>x.id===shelfEditId);
+   const cardIds=[...shelfDraft.selected].filter(x=>activeCards().some(c=>c.id===x));
+   if(existing){Object.assign(existing,{title,description,cardIds,updatedAt:now().toISOString()})}
+   else{
+     if(!Array.isArray(state.shelves))state.shelves=[];
+     const moment=now().toISOString();
+     state.shelves.push({id:id(),title,description,cardIds,createdAt:moment,updatedAt:moment});
+   }
+   shelfEditId=null;shelfDraft=null;shelfQuery='';shelfDeleteConfirm=false;
+   save();page='shelves';render();notify('Полка сохранена');return;
+ }
  if(!['single','bulk'].includes(e.target.id))return;
  e.preventDefault();
  const f=new FormData(e.target);
@@ -444,8 +468,19 @@ document.addEventListener('submit',e=>{
  else for(const line of String(f.get('bulk')||'').split(/\r?\n/)){const p=line.split('|').map(x=>x.trim());if(p.length>=2)n+=Number(add(...p.slice(0,5)))}
  save();e.target.reset();render();notify('Добавлено карточек: '+n);
 });
-document.addEventListener('input',e=>{if(e.target.id==='search'){search=e.target.value;document.querySelector('#results').innerHTML=results()}});
-document.addEventListener('change',e=>{if(e.target.id==='import')importData(e.target.files?.[0])});
+document.addEventListener('input',e=>{
+ if(e.target.id==='search'){search=e.target.value;document.querySelector('#results').innerHTML=results()}
+ else if(e.target.id==='shelf-search'&&shelfDraft){shelfQuery=e.target.value;document.querySelector('#shelf-choices').innerHTML=shelfChoices()}
+});
+document.addEventListener('change',e=>{
+ if(e.target.id==='import')importData(e.target.files?.[0]);
+ else if(e.target.matches('[data-shelf-card]')&&shelfDraft){
+   const cardId=e.target.dataset.shelfCard;
+   if(e.target.checked)shelfDraft.selected.add(cardId);else shelfDraft.selected.delete(cardId);
+   const label=document.querySelector('#shelf-selected-count');
+   if(label)label.textContent=shelfDraft.selected.size+' выбрано';
+ }
+});
 document.addEventListener('keydown',e=>{if(page!=='study'||e.target.matches('input,textarea,button,select,a')||modal)return;if(e.key===' '||e.key==='Enter'){e.preventDefault();flip()}else if(['ArrowLeft','ArrowRight'].includes(e.key))skip();else if(e.key==='1')grade(false);else if(e.key==='2')grade(true)});
 let startX=null;document.addEventListener('touchstart',e=>{if(e.target.closest('.card')&&!e.target.closest('.speak-button'))startX=e.touches[0].clientX},{passive:true});document.addEventListener('touchend',e=>{if(startX===null)return;const dx=e.changedTouches[0].clientX-startX;startX=null;if(Math.abs(dx)>65){e.preventDefault();skip()}},{passive:false});
 render();
