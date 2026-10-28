@@ -14,6 +14,11 @@ create index if not exists everyword_cards_user_updated_idx
 
 alter table public.everyword_cards enable row level security;
 
+-- The Data API needs table privileges in addition to RLS.
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.everyword_cards to authenticated;
+revoke all on public.everyword_cards from anon;
+
 drop policy if exists "Everyword owner can read" on public.everyword_cards;
 create policy "Everyword owner can read"
   on public.everyword_cards for select to authenticated
