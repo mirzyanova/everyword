@@ -133,7 +133,7 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
         snapshots.set(c.id, cardJSON(c));
       }
       if (changed) mergeCards(Array.from(current.values()));
-      if (status !== 'error') setStatus('connected');
+      setStatus('connected');
     } catch (e) {
       console.error('Everyword cloud refresh failed', e);
       setStatus('error');
@@ -144,7 +144,7 @@ export function createCloudBridge({ getCards, mergeCards, onStatus, onIdentity }
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flush, 700);
   };
-  api.refresh = async function() { if (status === 'error') { setStatus('connected'); } await pull(); };
+  api.refresh = async function() { if (!user) return; if (!ready) await initialSync(); else await pull(); };
   api.signIn = async function(email) {
     if (!configured) throw new Error('Облако ещё не настроено');
     await loadLibrary();
