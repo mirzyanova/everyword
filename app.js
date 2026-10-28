@@ -199,6 +199,45 @@ function results(){
   return '<div class="wordrow"><div class="row"><strong>'+safe(c.en)+'</strong><span class="dot '+(status===true?'yes':status===false?'no':'')+'"></span></div><p class="ru">'+safe(c.ru)+'</p><div class="row"><small class="muted">'+(c.difficult?'Сложное слово':archive(c)?'Архив':fresh(c)?'Новое':due(c)?'Пора повторить':'Повторение позже')+'</small><button class="link" data-action="edit" data-id="'+safe(c.id)+'">Редактировать</button></div></div>';
  }).join('')+'</div>'+(cards.length?'':'<p class="muted">Пока ничего не найдено.</p>');
 }
+function shelfPage(){
+ const collection=activeShelves().slice().sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+ return heading('ТЕМАТИЧЕСКИЕ ПОДБОРКИ','Полка','Собирай слова по темам: для работы, путешествий или любых других задач. Одно слово может лежать на нескольких полках.')+
+ '<div class="shelf-toolbar"><span class="muted">'+collection.length+' '+(collection.length===1?'полка':'полок')+'</span><button class="primary" data-action="shelf-new">＋ Новая полка</button></div>'+
+ (collection.length?'<div class="shelf-grid">'+collection.map(sh=>{
+   const included=activeCards().filter(c=>sh.cardIds.includes(c.id));
+   return '<section class="shelf-card"><div class="shelf-card-icon" aria-hidden="true">▦</div><h2>'+safe(sh.title)+'</h2>'+
+    (sh.description?'<p class="shelf-description">'+safe(sh.description)+'</p>':'')+
+    '<p class="muted">'+included.length+' '+(included.length===1?'слово':included.length>=2&&included.length<=4?'слова':'слов')+'</p>'+
+    (included.length?'<div class="shelf-preview">'+included.slice(0,5).map(c=>'<span>'+safe(c.en)+'</span>').join('')+(included.length>5?'<span>+ '+(included.length-5)+'</span>':'')+'</div>':'<p class="shelf-empty">Пока пусто — добавь слова из коллекции</p>')+
+    '<div class="shelf-actions"><button class="primary" data-action="shelf-start" data-id="'+safe(sh.id)+'" '+(!included.length?'disabled':'')+'>Учить слова →</button><button class="secondary" data-action="shelf-edit" data-id="'+safe(sh.id)+'">Изменить</button></div></section>'
+ }).join('')+'</div>':'<div class="shelf-welcome"><div class="shelf-welcome-icon" aria-hidden="true">▦</div><h2>Твои слова — по полочкам</h2><p>Например, «Для работы», «В путешествии» или «Полезные выражения». Создай первую полку и выбери слова из коллекции.</p><button class="primary" data-action="shelf-new">Создать полку →</button></div>')+
+ '<div class="shelf-hint">В дальнейшем можно попросить ChatGPT собрать тематическую полку из слов, которые уже есть в твоей коллекции.</div>';
+}
+function openShelfEditor(sh=null){
+ shelfEditId=sh?.id||'new';
+ shelfDraft={title:sh?.title||'',description:sh?.description||'',selected:new Set(sh?.cardIds||[])};
+ shelfQuery='';shelfDeleteConfirm=false;render();
+}
+function shelfChoices(){
+ if(!shelfDraft)return '';
+ const cards=activeCards().filter(c=>norm(c.en+' '+c.ru+' '+c.example).includes(norm(shelfQuery)));
+ return cards.length?cards.map(c=>'<label class="shelf-word-choice"><input type="checkbox" data-shelf-card="'+safe(c.id)+'" '+(shelfDraft.selected.has(c.id)?'checked':'')+'><span><strong>'+safe(c.en)+'</strong><small>'+safe(c.ru)+'</small></span></label>').join(''):
+ '<p class="muted">По этому запросу слов не найдено.</p>';
+}
+function shelfEditor(){
+ if(!shelfDraft)return '';
+ const old=shelfEditId!=='new'?activeShelves().find(sh=>sh.id===shelfEditId):null;
+ return '<div class="overlay"><section class="popup edit-popup shelf-edit-popup" role="dialog" aria-modal="true" aria-label="Настроить полку">'+
+ '<div class="row"><h2>'+(old?'Изменить полку':'Создать полку')+'</h2><button class="edit-close" data-action="shelf-close" aria-label="Закрыть">×</button></div>'+
+ '<form id="shelf-editor"><div class="field"><label>Название полки *</label><input name="title" required maxlength="80" placeholder="Например, Для работы" value="'+safe(shelfDraft.title)+'"></div>'+
+ '<div class="field"><label>Описание (необязательно)</label><textarea name="description" maxlength="300" placeholder="Для чего эта подборка">'+safe(shelfDraft.description)+'</textarea></div>'+
+ '<div class="shelf-picker-title"><strong>Слова из твоей коллекции</strong><span id="shelf-selected-count">'+shelfDraft.selected.size+' выбрано</span></div>'+
+ '<input class="search" id="shelf-search" placeholder="Найти по-русски или по-английски…" value="'+safe(shelfQuery)+'" aria-label="Найти слово для полки">'+
+ '<div id="shelf-choices" class="shelf-choices">'+shelfChoices()+'</div>'+
+ '<div class="edit-actions"><button class="primary" type="submit">Сохранить полку</button><button class="secondary" type="button" data-action="shelf-close">Отмена</button></div></form>'+
+ (old?(shelfDeleteConfirm?'<div class="delete-confirm"><p>Удалить полку? Сами карточки останутся в общей коллекции.</p><button class="delete-button" data-action="shelf-delete">Да, удалить полку</button><button class="link" data-action="shelf-cancel-delete">Оставить</button></div>':'<button class="delete-link" data-action="shelf-ask-delete">Удалить полку</button>'):'')+
+ '</section></div>';
+}
 function addPage(){return heading('НОВЫЕ СЛОВА','Пополнить коллекцию','Добавляй одну карточку или целые списки. В ближайшие занятия попадут все новые слова.')+'<section class="panel" style="margin-top:28px"><form id="single"><div class="grid"><div class="field"><label>Русский смысл *</label><input name="ru" required placeholder="Разобраться"></div><div class="field"><label>Английское выражение *</label><input name="en" required placeholder="figure out"></div><div class="field"><label>Пример на английском</label><input name="example" placeholder="I will figure it out."></div><div class="field"><label>Перевод примера</label><input name="exampleRu"></div></div><div class="field"><label>Пояснение / контекст</label><textarea name="note"></textarea></div><button class="primary">＋ Сохранить карточку</button></form></section><section class="panel" style="margin-top:20px"><h2>Добавить списком</h2><p class="muted">Одна карточка в строке, поля разделяются вертикальной чертой |. Порядок: русский смысл | английское слово | пример EN | перевод примера | пояснение.</p><form id="bulk"><div class="field"><textarea name="bulk" required placeholder="Разобраться | figure out | I will figure it out.&#10;Тем не менее | nevertheless"></textarea></div><button class="secondary">＋ Добавить весь список</button></form></section>'}
 function account(){
   if(cloud.signedIn){
@@ -229,9 +268,10 @@ const cloud=createCloudBridge({
   onStatus:()=>{if(page==='account'||page==='settings')render()}
 });
 function render(){
- const content=({home,study,library,add:addPage,settings,account}[page]||home)();
+ const content=({home,study,library,add:addPage,shelves:shelfPage,settings,account}[page]||home)();
  let popup='';
  if(editId)popup=cardEditor();
+ else if(shelfDraft)popup=shelfEditor();
  else if(modal==='guest-invite')popup='<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>';
  else if(modal==='congratulations')popup='<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+completedPractices().length+' практики!</b><h2>Так держать!</h2><p class="muted">Ты завершила ещё три занятия. Продолжай в своём ритме!</p><button class="primary" data-action="close">Продолжить →</button></div></div>';
  root.innerHTML='<div class="app">'+sidebar()+'<main class="main">'+content+'</main>'+mobile()+'</div>'+popup;
