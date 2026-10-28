@@ -1,4 +1,4 @@
-import { createCloudBridge } from './cloud-sync.js';
+import { createCloudBridge } from './cloud-sync.js?v=20261028-8';
 
 const KEY='everyword-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
 let state={cards:[]},accountId=null,appReadyShown=false,page='home',queue=[],shown=false,flipped=false,practice=false,done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
