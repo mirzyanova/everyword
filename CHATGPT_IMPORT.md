@@ -52,3 +52,36 @@ Use a read-only `SELECT` to verify the inserted cards by ID and `user_id`. Repor
 ## One-time instruction for the tutor chat
 
 > When I say “Добавь эти слова в Everyword”, use my connected Supabase app to save the words/expressions we have just agreed on as flashcards, following this document. Confirm actual insertion, not merely preparation. Do not add anything until I explicitly ask.
+
+## Thematic shelves ("Полка")
+
+The user can manually create thematic shelves in Everyword, and can **explicitly** ask ChatGPT to create or update a shelf (for example, "Собери полку 'Для работы' из моих существующих слов").
+
+Project ID is the same: `hdczcqtclhxygdlvfibh`.
+
+Table: `public.everyword_shelves`.
+
+Columns: `id uuid`, `user_id uuid`, `payload jsonb`, `updated_at timestamptz`.
+
+Payload contract:
+```json
+{
+  "id": "<same UUID as row id>",
+  "title": "Для работы",
+  "description": "Useful phrases for meetings",
+  "cardIds": ["<existing card UUID>", "<another existing card UUID>"],
+  "createdAt": "<ISO 8601 UTC timestamp>",
+  "updatedAt": "<ISO 8601 UTC timestamp>"
+}
+```
+
+For shelf operations:
+1. Verify the **same target authenticated user** as for the cards. Never access or modify shelves belonging to other site users.
+2. Search `everyword_cards` for **that user's** existing active cards; only use those real UUIDs in `payload.cardIds`. Never fabricate card UUIDs. Ignore cards with a non-null `payload.deletedAt`.
+3. If the user asks to create a shelf, choose a unique UUID for the shelf and save the row with matching `payload.id`.
+4. If updating a shelf, fetch its existing payload first, keep `id`, `createdAt`, and other fields, change `cardIds` and `updatedAt`; never overwrite a newer shelf from stale data. Check for a shelf with the same name so you don't accidentally create duplicates.
+5. A card may be present on multiple shelves; membership does not alter its learning progress.
+6. **Do not create or update a shelf until the user explicitly requests it.** If the request is vague or the selection criteria are uncertain, propose the list for approval.
+7. Verify with a read-only query and report how many cards are in the shelf. The site syncs shelves on focus / periodic refresh, or by going to **Аккаунт → Синхронизировать сейчас**.
+
+A shelf can be deleted in the UI using a soft-delete marker `payload.deletedAt` (ISO timestamp) and a fresh `updatedAt`. ChatGPT should not hard-delete rows unless the user explicitly requests permanent deletion and the consequences have been explained.
