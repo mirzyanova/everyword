@@ -1,5 +1,4 @@
-// Safe, public client configuration only.
-// Filled in after the Supabase project is created and protected by RLS.
-// Never place a Supabase secret or service_role key in this file.
-export const SUPABASE_URL = '';
-export const SUPABASE_PUBLISHABLE_KEY = '';
+// Public client-side settings for the protected Everyword Supabase database.
+// This is a PUBLISHABLE key. Never commit secret/service_role keys.
+export const SUPABASE_URL = 'https://hdczcqtclhxygdlvfibh.supabase.co';
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_t2dTyng-doUR5Dh_PYQ4xw_qvC-vOLw';
