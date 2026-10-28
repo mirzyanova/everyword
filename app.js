@@ -1,20 +1,59 @@
 import { createCloudBridge } from './cloud-sync.js?v=20261028-8';
 
-const KEY='everyword-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
-let state={cards:[]},accountId=null,appReadyShown=false,page='home',queue=[],shown=false,flipped=false,practice=false,done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
+const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
+let state=loadGuest(),accountId=null,page='home',queue=[],shown=false,flipped=false,practice=false,sessionRated=0,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
 const now=()=>new Date(),id=()=>crypto.randomUUID(),norm=s=>String(s||'').trim().toLocaleLowerCase(),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(x?.cards))return x}catch{}return {cards:[]}}
-function loadAccount(uid){try{const saved=localStorage.getItem(USER_PREFIX+uid);if(saved){const parsed=JSON.parse(saved);if(Array.isArray(parsed.cards))return parsed}}catch(e){console.error('Не удалось прочитать сохранённые слова',e)}return null}
-function switchAccount(user){const uid=user?.id||null;if(uid===accountId)return;accountId=uid;appReadyShown=false;queue=[];shown=false;flipped=false;practice=false;undo=null;modal=null;page='home';search='';
-  if(!uid){state={cards:[]};render();return}
+function loadGuest(){
+  try{const raw=localStorage.getItem(GUEST_KEY);if(raw){const x=JSON.parse(raw);if(Array.isArray(x.cards))return x}}catch(e){console.error(e)}
+  return !localStorage.getItem(LEGACY_OWNER)?load():{cards:[]};
+}
+function loadAccount(uid){
+  try{const raw=localStorage.getItem(USER_PREFIX+uid);if(raw){const x=JSON.parse(raw);if(Array.isArray(x.cards))return x}}catch(e){console.error(e)}
+  return null;
+}
+function mergeCardSets(left,right){
+  const merged=new Map((left?.cards||[]).filter(c=>c?.id).map(c=>[c.id,c]));
+  for(const c of (right?.cards||[]))if(c?.id){
+    const previous=merged.get(c.id);
+    if(!previous||String(c.updatedAt||c.createdAt||'')>String(previous.updatedAt||previous.createdAt||''))merged.set(c.id,c);
+  }
+  return {cards:[...merged.values()]};
+}
+function switchAccount(user){
+  const uid=user?.id||null;
+  if(uid===accountId)return;
+  const previous=accountId;
+  if(!previous){try{localStorage.setItem(GUEST_KEY,JSON.stringify(state))}catch(e){console.error(e)}}
+  accountId=uid;queue=[];shown=false;flipped=false;practice=false;sessionRated=0;undo=null;modal=null;page='home';search='';
+  if(!uid){state=loadGuest();guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1';render();return}
   let saved=loadAccount(uid);
-  const legacy=load(),owner=localStorage.getItem(LEGACY_OWNER);
-  if(!saved&&legacy.cards.length&&(!owner||owner===uid)){saved=legacy;try{localStorage.setItem(LEGACY_OWNER,uid)}catch(e){console.error(e)}}
+  const owner=localStorage.getItem(LEGACY_OWNER);
+  if(owner===uid)saved=mergeCardSets(saved,load());
+  if(!previous){
+    const guest=loadGuest();
+    if(guest.cards.length){
+      saved=mergeCardSets(saved,guest);
+      try{localStorage.setItem(GUEST_KEY,JSON.stringify({cards:[]}))}catch(e){console.error(e)}
+    }
+  }
   state=saved||{cards:[]};
-  try{localStorage.setItem(USER_PREFIX+uid,JSON.stringify(state))}catch(e){console.error('Не удалось сохранить данные аккаунта',e)}
+  try{
+    localStorage.setItem(USER_PREFIX+uid,JSON.stringify(state));
+    if(!owner&&load().cards.length)localStorage.setItem(LEGACY_OWNER,uid);
+  }catch(e){console.error('Не удалось сохранить данные аккаунта',e)}
   render();
 }
-function save(){try{localStorage.setItem(accountId?USER_PREFIX+accountId:KEY,JSON.stringify(state));if(accountId)cloud.localChange()}catch{alert('Не удалось сохранить данные. Экспортируй резервную копию.')}}
+function save(){
+  try{localStorage.setItem(accountId?USER_PREFIX+accountId:GUEST_KEY,JSON.stringify(state));if(accountId)cloud.localChange()}
+  catch{alert('Не удалось сохранить данные. Экспортируй резервную копию.')}
+}
+function maybeInviteAfterLesson(){
+  if(accountId||cloud.signedIn||guestPrompted||!sessionRated)return;
+  guestPrompted=true;
+  try{localStorage.setItem(GUEST_PROMPT,'1')}catch(e){console.error(e)}
+  modal='guest-invite';
+}
 function notify(s){toastEl.textContent=s;toastEl.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>toastEl.style.display='none',3000)}
 function today(){const d=now();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 function daily(c){return (c.history||[]).filter(x=>x.at.slice(0,10)===today())}
@@ -28,7 +67,7 @@ function add(ru,en,example='',exampleRu='',note=''){ru=String(ru).trim();en=Stri
 function interleave(){const a=state.cards.filter(due).sort((x,y)=>new Date(x.fsrs.due)-new Date(y.fsrs.due));const b=state.cards.filter(fresh).sort((x,y)=>x.createdAt.localeCompare(y.createdAt));const out=[];while(a.length||b.length){if(a.length)out.push(a.shift().id);if(a.length)out.push(a.shift().id);if(b.length)out.push(b.shift().id)}return out}
 function refill(){if(practice)return;const pending=new Set(queue);for(const k of interleave())if(!pending.has(k))queue.push(k)}
 function current(){return state.cards.find(c=>c.id===queue[0])}
-function begin(free=false){practice=free;queue=free?state.cards.map(c=>c.id):interleave();shown=false;flipped=false;page='study';render()}
+function begin(free=false){practice=free;sessionRated=0;queue=free?state.cards.map(c=>c.id):interleave();shown=false;flipped=false;page='study';render()}
 function sidebar(){const menus=[['home','⌂ Главная'],['study','◇ Учить слова'],['library','▤ Мои слова'],['add','＋ Добавить']];return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav">'+menus.map(([p,t])=>'<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+'<button data-page="settings" class="'+(page==='settings'?'active':'')+'">⚙ Настройки</button></nav></aside>'}
 function mobile(){return '<nav class="mobile">'+[['home','⌂ Главная'],['study','◇ Учить'],['library','▤ Слова'],['add','＋ Добавить']].map(([p,t])=>'<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+'</nav>'}
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
