@@ -292,12 +292,93 @@ function cardEditor(){
 }
 async function importData(file){if(!file)return;try{const x=JSON.parse(await file.text());if(!Array.isArray(x.cards))throw Error('Wrong format');const ids=new Set(state.cards.map(c=>c.id));let n=0;for(const c of x.cards){if(c.id&&c.ru&&c.en&&Array.isArray(c.history)&&!ids.has(c.id)){state.cards.push(c);ids.add(c.id);n++}}save();render();notify('Импортировано карточек: '+n)}catch{notify('Не удалось импортировать файл')}}
 const examples=[['Разобраться, выяснить','figure out','I need to figure out what happened.','Мне нужно разобраться, что произошло.'],['Тем не менее','nevertheless','Nevertheless, I decided to go.','Тем не менее я решила пойти.'],['В итоге, со временем','eventually','Eventually, everything worked out.','В итоге всё получилось.'],['Случайно встретить','run into','I ran into an old friend.','Я случайно встретила старого друга.'],['Ладить с кем-то','get along with','I get along with my team.','Я хорошо лажу со своей командой.'],['Принимать как должное','take for granted',"Don't take it for granted.",'Не воспринимай это как должное.']];
-document.addEventListener('click',e=>{const b=e.target.closest('[data-page],[data-action]');if(!b)return;if(b.dataset.page){const dest=b.dataset.page;if(page==='study'&&dest!=='study'&&dest!=='account')maybeInviteAfterLesson();page=dest;if(page==='study'&&!queue.length){practice=false;queue=interleave();sessionRated=0}render();return}const a=b.dataset.action;if(a==='begin')begin();else if(a==='practice')begin(true);else if(a==='next-joke'){jokeOfVisit=drawJoke();render()}else if(a==='samples'){examples.forEach(x=>add(...x));save();render();notify('Добавлено 6 примеров')}else if(a==='flip')flip();else if(a==='speak'){e.stopPropagation();speakEnglish(current()?.en||'')}else if(a==='skip')skip();else if(a==='yes')grade(true);else if(a==='no')grade(false);else if(a==='undo')doUndo();else if(a==='cloud-refresh')cloud.refresh().then(()=>notify('Облако проверено')).catch(()=>notify('Ошибка обновления'));else if(a==='cloud-signout')cloud.signOut().then(()=>{render();notify('Выход выполнен')}).catch(()=>notify('Не удалось выйти из аккаунта'));else if(a==='invite-login'){modal=null;page='account';render()}else if(a==='invite-later'){modal=null;render()}else if(a==='close'){modal=null;render()}else if(a==='export'){const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download='everyword-backup-'+today()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(u),500)}else if(a==='edit'){const c=state.cards.find(x=>x.id===b.dataset.id);if(!c)return;const ru=prompt('Русский смысл',c.ru);if(ru===null)return;const en=prompt('Английское выражение',c.en);if(en===null)return;if(!ru.trim()||!en.trim()){notify('Оба поля обязательны');return}c.ru=ru.trim();c.en=en.trim();c.updatedAt=now().toISOString();save();render();notify('Карточка обновлена')}});
-document.addEventListener('submit',e=>{if(e.target.id==='cloud-login'){e.preventDefault();const email=String(new FormData(e.target).get('email')||'').trim();cloud.signIn(email).then(()=>{render();notify('Ссылка отправлена на почту')}).catch(err=>notify(err?.message||'Не удалось отправить письмо'));return}if(!['single','bulk'].includes(e.target.id))return;e.preventDefault();const f=new FormData(e.target);let n=0;if(e.target.id==='single')n=Number(add(...['ru','en','example','exampleRu','note'].map(k=>String(f.get(k)||''))));else for(const line of String(f.get('bulk')||'').split(/\r?\n/)){const p=line.split('|').map(x=>x.trim());if(p.length>=2)n+=Number(add(...p.slice(0,5)))}save();e.target.reset();render();notify('Добавлено карточек: '+n)});
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-page],[data-action]');
+ if(!b)return;
+ if(b.dataset.page){
+   const dest=b.dataset.page;
+   if(dest==='study'){
+     if(!lesson||lesson.completed)begin('scheduled');
+     else {page='study';render()}
+   }else{page=dest;render()}
+   return;
+ }
+ const a=b.dataset.action;
+ if(a==='begin')begin('scheduled');
+ else if(a==='practice')begin('free');
+ else if(a==='hard')begin('hard');
+ else if(a==='next-joke'){jokeOfVisit=drawJoke();render()}
+ else if(a==='samples'){examples.forEach(x=>add(...x));save();render();notify('Добавлено 6 примеров')}
+ else if(a==='flip')flip();
+ else if(a==='speak'){e.stopPropagation();speakEnglish(current()?.en||'')}
+ else if(a==='skip')skip();
+ else if(a==='yes')grade(true);
+ else if(a==='no')grade(false);
+ else if(a==='undo')doUndo();
+ else if(a==='cloud-refresh')cloud.refresh().then(()=>notify('Облако проверено')).catch(()=>notify('Ошибка обновления'));
+ else if(a==='cloud-signout')cloud.signOut().then(()=>{render();notify('Выход выполнен')}).catch(()=>notify('Не удалось выйти из аккаунта'));
+ else if(a==='invite-login'){modal=null;page='account';render()}
+ else if(a==='invite-later'){modal=null;render()}
+ else if(a==='close'){modal=null;render()}
+ else if(a==='edit'){
+   const c=activeCards().find(x=>x.id===b.dataset.id);
+   if(c){editId=c.id;deleteConfirm=false;render()}
+ }else if(a==='edit-close'){editId=null;deleteConfirm=false;render()}
+ else if(a==='ask-delete'){deleteConfirm=true;render()}
+ else if(a==='cancel-delete'){deleteConfirm=false;render()}
+ else if(a==='delete-card'){
+   const c=activeCards().find(x=>x.id===editId);
+   if(!c)return;
+   c.deletedAt=now().toISOString();c.updatedAt=c.deletedAt;
+   if(lesson&&!lesson.completed){
+     lesson.tasks=lesson.tasks.filter(t=>t.id!==c.id);
+     lesson.cardIds=lesson.cardIds.filter(x=>x!==c.id);
+     // Deleting the last card cancels an unfinished lesson, not a completion.
+     if(!lesson.tasks.length)lesson=null;
+   }
+   editId=null;deleteConfirm=false;undo=null;
+   save();page='library';render();notify('Карточка удалена');
+ }else if(a==='export'){
+   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+   const u=URL.createObjectURL(blob);const link=document.createElement('a');link.href=u;link.download='everyword-backup-'+today()+'.json';link.click();setTimeout(()=>URL.revokeObjectURL(u),500);
+ }
+});
+document.addEventListener('submit',e=>{
+ if(e.target.id==='cloud-login'){
+   e.preventDefault();const email=String(new FormData(e.target).get('email')||'').trim();
+   cloud.signIn(email).then(()=>{render();notify('Ссылка отправлена на почту')}).catch(err=>notify(err?.message||'Не удалось отправить письмо'));
+   return;
+ }
+ if(e.target.id==='card-editor'){
+   e.preventDefault();
+   const c=activeCards().find(x=>x.id===editId);
+   if(!c)return;
+   const form=new FormData(e.target);
+   const ru=String(form.get('ru')||'').trim(),en=String(form.get('en')||'').trim();
+   if(!ru||!en){notify('Русское и английское поля обязательны');return}
+   const duplicate=activeCards().some(x=>x.id!==c.id&&norm(x.ru)===norm(ru)&&norm(x.en)===norm(en));
+   if(duplicate){notify('Такая карточка уже есть в коллекции');return}
+   c.ru=ru;c.en=en;
+   c.example=String(form.get('example')||'').trim();
+   c.exampleRu=String(form.get('exampleRu')||'').trim();
+   c.note=String(form.get('note')||'').trim();
+   c.difficult=form.has('difficult');
+   c.updatedAt=now().toISOString();
+   save();editId=null;deleteConfirm=false;render();notify('Карточка обновлена');
+   return;
+ }
+ if(!['single','bulk'].includes(e.target.id))return;
+ e.preventDefault();
+ const f=new FormData(e.target);
+ let n=0;
+ if(e.target.id==='single')n=Number(add(...['ru','en','example','exampleRu','note'].map(k=>String(f.get(k)||''))));
+ else for(const line of String(f.get('bulk')||'').split(/\r?\n/)){const p=line.split('|').map(x=>x.trim());if(p.length>=2)n+=Number(add(...p.slice(0,5)))}
+ save();e.target.reset();render();notify('Добавлено карточек: '+n);
+});
 document.addEventListener('input',e=>{if(e.target.id==='search'){search=e.target.value;document.querySelector('#results').innerHTML=results()}});
 document.addEventListener('change',e=>{if(e.target.id==='import')importData(e.target.files?.[0])});
 document.addEventListener('keydown',e=>{if(page!=='study'||e.target.matches('input,textarea,button,select,a')||modal)return;if(e.key===' '||e.key==='Enter'){e.preventDefault();flip()}else if(['ArrowLeft','ArrowRight'].includes(e.key))skip();else if(e.key==='1')grade(false);else if(e.key==='2')grade(true)});
 let startX=null;document.addEventListener('touchstart',e=>{if(e.target.closest('.card')&&!e.target.closest('.speak-button'))startX=e.touches[0].clientX},{passive:true});document.addEventListener('touchend',e=>{if(startX===null)return;const dx=e.changedTouches[0].clientX-startX;startX=null;if(Math.abs(dx)>65){e.preventDefault();skip()}},{passive:false});
 render();
 async function initialize(){for(const url of ['https://cdn.jsdelivr.net/npm/ts-fsrs@5.4.2/dist/index.mjs','https://unpkg.com/ts-fsrs@5.4.2/dist/index.mjs','https://esm.sh/ts-fsrs@5.4.2?bundle'])try{const lib=await import(url);if(!lib.fsrs||!lib.createEmptyCard)continue;window.fsrsLib=lib;rating=lib.Rating;fsrs=lib.fsrs({request_retention:0.9,enable_short_term:true,learning_steps:['1m','10m'],relearning_steps:['10m'],enable_fuzz:true});render();return}catch(e){console.warn('FSRS source unavailable',e)}notify('Не удалось загрузить FSRS. Проверь интернет.');render()}
-initialize();cloud.init();setInterval(()=>{if(page==='study'&&!practice){const x=queue.length;refill();if(queue.length!==x)render()}},30000);
+initialize();cloud.init();
