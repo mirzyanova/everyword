@@ -81,8 +81,7 @@ body{background:var(--bg);color:var(--ink)}
 .home-sun{position:absolute;z-index:-1;right:24px;top:-18px;width:156px;height:156px;pointer-events:none;border-radius:50%;opacity:.82;transform:none;
  background:radial-gradient(circle at center,rgba(240,178,89,.71) 0%,rgba(242,186,99,.56) 27%,rgba(243,192,118,.30) 50%,rgba(246,207,149,.12) 67%,rgba(248,221,182,.035) 77%,rgba(248,221,182,0) 87%);
  filter:blur(11px)}
-.daily-quote{margin-top:auto;padding:58px 15px 24px;min-height:125px;text-align:center;color:#8a7766;display:flex;align-items:center;justify-content:flex-end;flex-direction:column;gap:12px;font-size:13px;line-height:1.7}
-.daily-quote-mark{color:#d4a469;font-size:14px}
+
 @media(max-width:740px){
   .main{min-height:100dvh}
   .home-heading{padding-right:90px;min-height:135px}
@@ -90,7 +89,7 @@ body{background:var(--bg);color:var(--ink)}
   .home-title-tail{font-size:clamp(24px,6.5vw,29px)}
   .home-sun{width:110px;height:110px;right:-6px;top:-10px;filter:blur(10px)}
   .home-subtitle{width:calc(100% + 90px);font-size:13px}
-  .daily-quote{padding-bottom:110px;padding-top:50px}
+  .joke-footer{padding-bottom:112px;padding-top:44px}
 }
 @media(prefers-reduced-motion:reduce){.home-sun{transform:none}}
 
@@ -161,3 +160,29 @@ body{background:var(--bg);color:var(--ink)}
 .speak-button:focus-visible{outline:2px solid #c59e72;outline-offset:3px}
 .speak-button svg{display:block}
 @media(max-width:480px){.word-with-sound{gap:9px}.speak-button{flex-basis:41px;width:41px;height:41px}}
+
+
+/* A new short joke on each fresh visit: understated, easy to read. */
+.joke-footer{
+  width:100%;max-width:760px;margin:0 auto;margin-top:auto;
+  padding:55px 14px 24px;text-align:center;color:#736457;
+  display:flex;align-items:center;flex-direction:column;gap:0;
+}
+.joke-label{font-size:10px;font-weight:600;letter-spacing:2.1px;color:#b49b7c}
+.joke-body{
+  margin:14px auto 7px;max-width:650px;
+  font-size:clamp(13px,1.45vw,15px);line-height:1.75;
+  letter-spacing:.03px;font-weight:400;white-space:pre-line;color:#66594c;
+}
+.joke-next{
+  color:#aa8c6c;background:transparent;border:0;border-radius:7px;
+  padding:9px 14px;margin-top:2px;font-size:12px;font-weight:500;
+  text-decoration:underline;text-decoration-color:transparent;
+  text-underline-offset:4px;
+}
+.joke-next:hover{text-decoration-color:currentColor;color:#7e6047}
+.joke-next:focus-visible{outline:2px solid #c49b68;outline-offset:2px}
+@media(max-width:740px){
+  .joke-footer{padding:49px 10px 118px}
+  .joke-body{font-size:13px;line-height:1.8}
+}
