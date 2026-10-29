@@ -396,3 +396,75 @@ body{background:var(--bg);color:var(--ink)}
  .due-words-hero{padding:25px 22px;align-items:flex-start;flex-direction:column;gap:14px}
  .due-words-hero>.secondary{align-self:flex-start}
 }
+
+
+/* Consistent SVG navigation system — identical geometry on iPad, desktop and mobile */
+.side .nav > button,
+.side .nav-account > button {
+  display:grid;
+  grid-template-columns:20px minmax(0,1fr);
+  align-items:center;
+  column-gap:13px;
+  min-height:50px;
+  padding:12px 15px;
+  margin-bottom:5px;
+  line-height:1.3;
+  font-size:15px;
+  font-weight:500;
+  color:#75695e;
+}
+.side .nav .nav-icon{
+  width:20px;height:20px;
+  display:block;justify-self:center;
+  flex-shrink:0;color:inherit;
+  stroke:currentColor;
+}
+.side .nav .nav-label{
+  min-width:0;
+  display:block;
+  text-align:left;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:inherit;
+}
+.side .nav > button.active,
+.side .nav-account > button.active {
+  color:#71523c;
+  background:#f2e8dc;
+  font-weight:600;
+}
+.side .nav > button:hover:not(.active),
+.side .nav-account > button:hover:not(.active) {
+  color:#71523c;
+  background:#f7f0e7;
+}
+.side .nav-account > button{font-weight:500}
+.side .nav-account .account-hint{
+  margin:0;
+  padding:0 8px 0 48px;
+  max-width:none;
+  font-size:11px;
+  line-height:1.5;
+}
+@media(max-width:740px){
+ .mobile button{
+   display:flex;flex-direction:column;
+   justify-content:center;align-items:center;
+   gap:4px;
+   padding:7px 1px 8px;
+   font-size:10px;line-height:1.15;
+   color:#837366;
+ }
+ .mobile .nav-icon{
+   display:block;flex:0 0 auto;
+   width:18px;height:18px;
+   stroke:currentColor;
+ }
+ .mobile .nav-label{
+   display:block;
+   font-size:10px;line-height:1.15;
+   text-align:center;
+ }
+ .mobile button.active{color:#72533d}
+}
