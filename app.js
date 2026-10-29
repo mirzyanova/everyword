@@ -82,7 +82,7 @@ function tally(){let a=0,b=0;activeCards().forEach(c=>{const x=daily(c)[0];if(x)
 function due(c){return c.fsrs && new Date(c.fsrs.due)<=now()}
 function fresh(c){return !c.fsrs}
 function archive(c){return c.fsrs&&c.fsrs.scheduled_days>=30&&new Set((c.history||[]).filter(x=>x.remembered&&!x.practice).map(x=>x.at.slice(0,10))).size>=5}
-function stats(){const cards=activeCards();return {all:cards.length,new:cards.filter(fresh).length,due:cards.filter(due).length,hard:cards.filter(c=>c.difficult).length}}
+function stats(){const cards=activeCards();return {all:cards.length,new:cards.filter(fresh).length,due:cards.filter(c=>c.fsrs&&due(c)).length,hard:cards.filter(c=>c.difficult).length}}
 function add(ru,en,example='',exampleRu='',note=''){
   ru=String(ru).trim();en=String(en).trim();
   if(!ru||!en)return false;
@@ -109,12 +109,14 @@ function dateLabel(day){
 function currentTask(){return lesson&&!lesson.completed?lesson.tasks[0]:null}
 function current(){const task=currentTask();return task?state.cards.find(c=>c.id===task.id&&!c.deletedAt):null}
 function begin(kind='new',shelfId=null){
+ const cards=activeCards();
  const selected=kind==='new'?latestAddedGroup().cards:
-  kind==='hard'?activeCards().filter(c=>c.difficult):
-  kind==='shelf'?activeCards().filter(c=>activeShelves().find(s=>s.id===shelfId)?.cardIds.includes(c.id)):
-  activeCards();
- lesson=selected.length?makeLesson(selected,kind==='new'?'scheduled':kind==='shelf'?'free':kind):null;
- if(lesson){lesson.kind=kind;lesson.shelfId=shelfId;lesson.title=kind==='shelf'?activeShelves().find(s=>s.id===shelfId)?.title:null}
+  kind==='due'?cards.filter(c=>c.fsrs&&due(c)):
+  kind==='hard'?cards.filter(c=>c.difficult):
+  kind==='shelf'?cards.filter(c=>activeShelves().find(sh=>sh.id===shelfId)?.cardIds.includes(c.id)):
+  shuffled(cards).slice(0,30);
+ lesson=selected.length?makeLesson(selected,kind):null;
+ if(lesson){lesson.shelfId=shelfId;lesson.title=kind==='shelf'?activeShelves().find(sh=>sh.id===shelfId)?.title:null}
  practice=kind!=='new';sessionRated=0;undo=null;shown=false;flipped=false;page='study';render();
 }
 
