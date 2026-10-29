@@ -20,12 +20,19 @@ export function makeLesson(cards,kind,random=Math.random){
   // placing two sides of one word next to each other by chance.
   const firstOrder=shuffled(cards,random);
   const firstSide=new Map();
-  const leadingSide=random()<.5?'ru':'en';
-  const firstTasks=firstOrder.map((c,i)=>{
-    const side=i%2===0?leadingSide:(leadingSide==='ru'?'en':'ru');
+  const firstTasks=[];
+  const sides={ru:0,en:0};
+  for(const c of firstOrder){
+    const previous=firstTasks.at(-1)?.side;
+    const beforePrevious=firstTasks.at(-2)?.side;
+    let side=random()<.5?'ru':'en';
+    if((side===previous&&side===beforePrevious)||sides[side]>sides[side==='ru'?'en':'ru']+1){
+      side=side==='ru'?'en':'ru';
+    }
+    sides[side]++;
     firstSide.set(c.id,side);
-    return {id:c.id,side};
-  });
+    firstTasks.push({id:c.id,side});
+  }
   const remaining=shuffled(firstOrder,random);
   const secondTasks=[];
   const spacing=Math.min(6,Math.floor(cards.length/2));
@@ -36,9 +43,13 @@ export function makeLesson(cards,kind,random=Math.random){
       return position-firstIndex>spacing;
     });
     const choices=eligible.length?eligible:remaining;
-    const previous=secondTasks.at(-1)?.side||firstTasks.at(-1)?.side;
+    const allSoFar=[...firstTasks,...secondTasks];
+    const previous=allSoFar.at(-1)?.side;
+    const beforePrevious=allSoFar.at(-2)?.side;
+    // Prefer variety, but not mechanical RU/EN alternation.
     const opposite=choices.filter(c=>firstSide.get(c.id)===previous);
-    const pool=opposite.length?opposite:choices;
+    const mustChange=previous===beforePrevious;
+    const pool=(mustChange||random()<.60)&&opposite.length?opposite:choices;
     const picked=pool[Math.floor(random()*pool.length)];
     secondTasks.push({id:picked.id,side:firstSide.get(picked.id)==='ru'?'en':'ru'});
     remaining.splice(remaining.findIndex(c=>c.id===picked.id),1);
