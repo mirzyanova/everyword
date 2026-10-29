@@ -1,6 +1,6 @@
 import { createCloudBridge } from './cloud-sync.js?v=20261028-13';
 import { JOKES } from './jokes.js?v=20261028-11';
-import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261028-12';
+import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
 let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
