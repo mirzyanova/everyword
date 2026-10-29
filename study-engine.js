@@ -46,10 +46,20 @@ export function makeLesson(cards,kind,random=Math.random){
     const allSoFar=[...firstTasks,...secondTasks];
     const previous=allSoFar.at(-1)?.side;
     const beforePrevious=allSoFar.at(-2)?.side;
-    // Prefer variety, but not mechanical RU/EN alternation.
-    const opposite=choices.filter(c=>firstSide.get(c.id)===previous);
-    const mustChange=previous===beforePrevious;
-    const pool=(mustChange||random()<.60)&&opposite.length?opposite:choices;
+    // Maintain a balanced pool of both languages, without strict alternation
+    // or long streaks caused by using up one direction too early.
+    const counts={ru:0,en:0};
+    for(const c of remaining){
+      const nextSide=firstSide.get(c.id)==='ru'?'en':'ru';
+      counts[nextSide]++;
+    }
+    const change=choices.filter(c=>firstSide.get(c.id)===previous);
+    let pool=choices;
+    const majority=counts.ru>counts.en+1?'ru':counts.en>counts.ru+1?'en':null;
+    const balanced=majority?choices.filter(c=>(firstSide.get(c.id)==='ru'?'en':'ru')===majority):[];
+    if(previous===beforePrevious&&change.length)pool=change;
+    else if(balanced.length)pool=balanced;
+    else if(change.length&&random()<.62)pool=change;
     const picked=pool[Math.floor(random()*pool.length)];
     secondTasks.push({id:picked.id,side:firstSide.get(picked.id)==='ru'?'en':'ru'});
     remaining.splice(remaining.findIndex(c=>c.id===picked.id),1);
@@ -79,7 +89,10 @@ export function answerLesson(lesson,remembered,random=Math.random){
   if(pending){
     const delay=Math.min(6,Math.max(2,Math.floor(lesson.cardIds.length/4)),lesson.tasks.length);
     const candidates=[];
-    for(let i=delay;i<=lesson.tasks.length;i++){
+    // Avoid returning failed cards only at the tail, where the remaining
+    // repetitions would otherwise cluster with nothing between them.
+    const latest=Math.max(delay,Math.min(lesson.tasks.length,Math.ceil(lesson.tasks.length*.72)));
+    for(let i=delay;i<=latest;i++){
       const prev=lesson.tasks.slice(Math.max(0,i-5),i).map(t=>t.id);
       const next=lesson.tasks.slice(i,i+5).map(t=>t.id);
       // Prefer placements far from another presentation of this same word.
