@@ -347,14 +347,15 @@ body{background:var(--bg);color:var(--ink)}
 .mode-info{position:absolute;right:17px;top:15px;z-index:10}
 .mode-info summary{
  display:flex;align-items:center;justify-content:center;
- width:34px;height:34px;list-style:none;border-radius:50%;
- color:#9a8268;background:#fff9efb8;border:1px solid #e9d9c5;
- cursor:pointer;transition:background .16s,color .16s,border-color .16s;
+ width:30px;height:30px;list-style:none;border-radius:50%;
+ color:#9a8268;background:transparent;border:0;
+ cursor:pointer;transition:color .16s;
 }
+.mode-info summary svg{width:15px;height:15px}
 .mode-info summary::-webkit-details-marker{display:none}
 .mode-info summary::marker{content:""}
 .mode-info summary:hover,.mode-info[open] summary{
- color:#76583d;background:#fff9f0;border-color:#cdb492;
+ color:#76583d;background:transparent;
 }
 .mode-info summary:focus-visible{outline:2px solid #bc9b73;outline-offset:3px}
 .mode-info-text{
