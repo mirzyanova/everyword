@@ -20,6 +20,70 @@ At initial setup, if the project contains exactly one user, establish that this 
 
 **Never expose** `service_role` / secret API keys, change login settings, or use public client credentials for privileged writes. The Supabase connector's `execute_sql` operates server-side with permissions; its use must be authorized by the user's explicit request. The website itself uses a publishable key and row-level security (RLS).
 
+## Critical SQL execution detail (diagnosed 2026-10-29)
+
+When using the **connected Supabase `execute_sql` management tool**, the SQL session is a privileged administrative session, **not the website's logged-in user session**. In this session:
+
+- `current_user` is usually `postgres`.
+- **`auth.uid()` is NULL. Never use `auth.uid()` as the `user_id` in an `execute_sql` INSERT.** If you do, the NOT NULL constraint rejects the card.
+- `gen_random_uuid()` creates a **new card ID**, not the user's account ID. Never put it in `user_id`.
+- Resolve the intended website user from `auth.users`, verify the account is unambiguous, and use that user's **existing UUID** as `user_id`. Do not assume the project ID or card ID is the owner ID.
+- RLS is designed to protect browser-level access. **Do not disable RLS, weaken policies, or grant anonymous access** to fix insertion through ChatGPT.
+- Ensure `payload` is a JSON **object**, not a JSON-encoded string, and `payload.id` equals the top-level UUID `id`.
+
+### Safe insertion template (one card, replace placeholders before executing)
+
+First read the intended `auth.users.id` as described above. Then use the following shape, with properly SQL-escaped, user-approved `ru`, `en`, `example`, `exampleRu`, and `note` values, replacing the explicit placeholders with actual data:
+
+```sql
+WITH owner AS (
+  SELECT id FROM auth.users
+  WHERE id = '<verified-existing-user-uuid>'::uuid
+),
+new_id AS (
+  SELECT gen_random_uuid() AS id
+),
+card_data AS (
+  SELECT
+    '<approved Russian meaning>'::text AS ru,
+    '<approved English expression>'::text AS en,
+    '<approved English example>'::text AS example,
+    '<approved translated example>'::text AS example_ru,
+    '<approved explanation>'::text AS note
+)
+INSERT INTO public.everyword_cards (id, user_id, payload, updated_at)
+SELECT
+  n.id, owner.id,
+  jsonb_build_object(
+    'id', n.id::text,
+    'ru', c.ru,
+    'en', c.en,
+    'example', c.example,
+    'exampleRu', c.example_ru,
+    'note', c.note,
+    'createdAt', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'updatedAt', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
+    'fsrs', NULL,
+    'history', '[]'::jsonb
+  ),
+  now()
+FROM owner
+CROSS JOIN new_id AS n
+CROSS JOIN card_data AS c
+WHERE NOT EXISTS (
+  SELECT 1 FROM public.everyword_cards AS existing
+  WHERE existing.user_id = owner.id
+    AND existing.payload->>'deletedAt' IS NULL
+    AND lower(btrim(existing.payload->>'ru')) = lower(btrim(c.ru))
+    AND lower(btrim(existing.payload->>'en')) = lower(btrim(c.en))
+)
+RETURNING id, user_id, payload->>'en' AS en;
+```
+
+This template is instructional, not a command to insert these placeholder strings. For batches, use one atomic transaction, one UUID per card, duplicate checks, and verify rows after writing. A zero-row `RETURNING` result means no card was inserted (e.g. wrong owner or existing duplicate); inspect and explain rather than claiming success.
+
+If an insertion fails, **report the exact database error code/message**, then check the resolved owner UUID, JSON type, escaping, and duplicate matching. Never claim a generic "the database rejects" without the actual error. Do not retry the same failing statement blindly.
+
 ## Card format
 
 Every row must contain:
