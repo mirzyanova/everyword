@@ -197,10 +197,16 @@ function speakerButton(){
  return '<button type="button" class="speak-button" data-action="speak" aria-label="Произнести по-английски" title="Прослушать произношение"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>';
 }
 function study(){
- const c=current(),task=currentTask(),label=lesson?.kind==='hard'?'Сложные слова':lesson?.kind==='free'?'Свободная практика':lesson?.kind==='shelf'?(lesson.title||'Полка'):'Новые слова';
+ const c=current(),task=currentTask(),label=lesson?.kind==='hard'?'Сложные слова':lesson?.kind==='free'?'Свободная практика':lesson?.kind==='due'?'Повторить сегодня':lesson?.kind==='shelf'?(lesson.title||'Полка'):'Новые слова';
  if(!c||!task){
-   return heading('МОЁ ЗАНЯТИЕ',label,lesson?.completed?'Практика завершена. Результат сохранён.':'В этом режиме пока нет слов.')+
-   '<div class="panel study-finished"><h2>'+(lesson?.completed?'Занятие завершено':'На сейчас всё!')+'</h2><p class="muted">'+(lesson?.completed?'В обоих направлениях все карточки успешно пройдены.':'Ты можешь добавить новые слова или выбрать свободную практику.')+'</p><div class="stack"><button class="primary" data-page="home">На главную</button><button class="secondary" data-action="practice">Свободная практика</button><button class="secondary" data-action="hard" '+(!stats().hard?'disabled':'')+'>Сложные слова</button></div></div>';
+   const completed=!!lesson?.completed;
+   return heading('МОЁ ЗАНЯТИЕ',label,completed?'Практика завершена. Результат сохранён.':'В этом режиме пока нет слов.')+
+   '<div class="panel study-finished"><h2>'+(completed?'Занятие завершено':'На сейчас всё!')+'</h2>'+
+   (completed&&lesson.praise?'<p class="study-praise">'+safe(lesson.praise)+'</p>':'')+
+   '<p class="muted">'+(completed?'Все слова пройдены в обоих направлениях, расписание повторений обновлено.':'Выбери другую практику или добавь новые слова.')+'</p>'+
+   '<div class="stack"><button class="primary" data-page="home">На главную</button>'+
+   '<button class="secondary" data-action="practice">'+(lesson?.kind==='free'?'Ещё 30 слов →':'Свободная практика')+'</button>'+
+   '<button class="secondary" data-action="hard" '+(!stats().hard?'disabled':'')+'>Сложные слова</button></div></div>';
  }
  const frontEnglish=task.side==='en', englishVisible=frontEnglish!==flipped;
  const headingText=frontEnglish?(flipped?'РУССКИЙ · ОТВЕТ':'ENGLISH · ПЕРЕВЕДИ НА РУССКИЙ'):(flipped?'ENGLISH · ОТВЕТ':'РУССКИЙ · ПЕРЕВЕДИ НА АНГЛИЙСКИЙ');
@@ -213,7 +219,7 @@ function study(){
  '<small>↻ Нажимай, чтобы переворачивать</small></div>'+
  '<div class="actions"><button class="no" data-action="no" '+(!shown?'disabled':'')+'>✕ Не вспомнила</button><button class="yes" data-action="yes" '+(!shown?'disabled':'')+'>✓ Вспомнила</button></div>'+
  '<div class="row"><button class="link" data-action="skip">↔ Пропустить</button>'+(undo?'<button class="link" data-action="undo">↶ Отменить оценку</button>':'')+'</div>'+
- (!fsrs&&lesson.kind==='new'?'<div class="alert">Подключаем FSRS… Для сохранения оценок нужен интернет.</div>':'')+
+ (!fsrs?'<div class="alert">Подключаем FSRS… Для сохранения оценок нужен интернет.</div>':'')+
  '</div>';
 }
 function library(){
@@ -234,7 +240,7 @@ function shelfPage(){
  '<div class="shelf-toolbar"><span class="muted">'+collection.length+' '+(collection.length===1?'полка':'полок')+'</span><button class="primary" data-action="shelf-new">＋ Новая полка</button></div>'+
  (collection.length?'<div class="shelf-grid">'+collection.map(sh=>{
    const included=activeCards().filter(c=>sh.cardIds.includes(c.id));
-   return '<section class="shelf-card"><div class="shelf-card-icon" aria-hidden="true">▦</div><h2>'+safe(sh.title)+'</h2>'+
+   return '<section class="shelf-card practice-with-info">'+modeInfo('shelf')+'<div class="shelf-card-icon" aria-hidden="true">▦</div><h2>'+safe(sh.title)+'</h2>'+
     (sh.description?'<p class="shelf-description">'+safe(sh.description)+'</p>':'')+
     '<p class="muted">'+included.length+' '+(included.length===1?'слово':included.length>=2&&included.length<=4?'слова':'слов')+'</p>'+
     (included.length?'<div class="shelf-preview">'+included.slice(0,5).map(c=>'<span>'+safe(c.en)+'</span>').join('')+(included.length>5?'<span>+ '+(included.length-5)+'</span>':'')+'</div>':'<p class="shelf-empty">Пока пусто — добавь слова из коллекции</p>')+
