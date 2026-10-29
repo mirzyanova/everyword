@@ -349,7 +349,7 @@ function finishLesson(){
  if(!lesson||!lesson.completed)return;
  lesson.praise=nextPraise();
  if(!Array.isArray(state.practices))state.practices=[];
- state.practices.push({id:id(),day:today(),kind:lesson.kind==='new'?'scheduled':lesson.kind==='shelf'?'free':lesson.kind,at:now().toISOString()});
+ state.practices.push({id:id(),day:today(),kind:(lesson.kind==='new'||lesson.kind==='due')?'scheduled':lesson.kind==='shelf'?'free':lesson.kind,at:now().toISOString()});
  save();
  const count=completedPractices().length;
  if(count%3===0)modal='congratulations';
