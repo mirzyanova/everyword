@@ -333,23 +333,21 @@ function speakEnglish(text){
 function flip(){if(!currentTask())return;flipped=!flipped;if(flipped)shown=true;render()}
 function skip(){if(skipLesson(lesson)){flipped=false;shown=false;undo=null;render()}else notify('Это единственная оставшаяся карточка')}
 function scheduleFSRS(c,remembered){
- if(!fsrs)return;
+ if(!fsrs)return false;
  try{
   const input=c.fsrs?{...c.fsrs,due:new Date(c.fsrs.due),last_review:c.fsrs.last_review?new Date(c.fsrs.last_review):undefined}:window.fsrsLib.createEmptyCard(new Date(c.createdAt));
   const result=fsrs.next(input,now(),remembered?rating.Good:rating.Again);
-  c.fsrs={...result.card,due:result.card.due.toISOString(),last_review:result.card.last_review?.toISOString()||null};
- }catch(e){console.error('FSRS error',e);notify('Не удалось пересчитать интервалы повторения')}
+  if(!result?.card?.due || !Number.isFinite(new Date(result.card.due).getTime()))throw Error('Недействительная дата FSRS');
+  c.fsrs={...result.card,due:new Date(result.card.due).toISOString(),last_review:result.card.last_review?new Date(result.card.last_review).toISOString():null};
+  return true;
+ }catch(e){
+  console.error('Everyword FSRS scheduling failed',e);
+  return false;
+ }
 }
 function finishLesson(){
  if(!lesson||!lesson.completed)return;
- if(lesson.kind==='new'){
-   for(const id of lesson.cardIds){
-     const c=state.cards.find(x=>x.id===id&&!x.deletedAt);
-     const record=lesson.records[id];
-     if(c&&record)scheduleFSRS(c,record.ru.first===true&&record.en.first===true);
-     if(c)c.updatedAt=now().toISOString();
-   }
- }
+ lesson.praise=nextPraise();
  if(!Array.isArray(state.practices))state.practices=[];
  state.practices.push({id:id(),day:today(),kind:lesson.kind==='new'?'scheduled':lesson.kind==='shelf'?'free':lesson.kind,at:now().toISOString()});
  save();
@@ -359,17 +357,34 @@ function finishLesson(){
 }
 function grade(remembered){
  if(!shown||!currentTask()||!lesson)return;
- if(lesson.kind==='new'&&!fsrs){notify('FSRS пока не загрузился. Проверь интернет.');return}
- const c=current();if(!c)return;
- undo={card:structuredClone(c),lesson:structuredClone(lesson)};
+ if(!fsrs){notify('FSRS пока не загрузился. Проверь интернет и попробуй снова.');return}
+ const c=current();
+ if(!c)return;
+ const cardBefore=structuredClone(c),lessonBefore=structuredClone(lesson);
  const result=answerLesson(lesson,remembered);
  if(!result)return;
- c.history.push({at:now().toISOString(),remembered,practice:lesson.kind!=='new',direction:result.task.side,lessonKind:lesson.kind});
+ const record=lesson.records[c.id];
+ c.history.push({at:now().toISOString(),remembered,practice:false,direction:result.task.side,lessonKind:lesson.kind});
  if(result.newlyHard)c.difficult=true;
+ // One FSRS event per word per lesson, after both translation directions are complete.
+ // The first attempt on each side determines memory strength; repeated successes
+ // after a mistake are consolidation within this lesson, not new spaced reviews.
+ if(!record.scheduled && record.ru.correct>=record.ru.required && record.en.correct>=record.en.required){
+  const firstTryBoth=record.ru.first===true&&record.en.first===true;
+  if(!scheduleFSRS(c,firstTryBoth)){
+   const idx=state.cards.findIndex(x=>x.id===cardBefore.id);
+   if(idx>=0)state.cards[idx]=cardBefore;
+   lesson=lessonBefore;
+   notify('Не удалось сохранить результат FSRS. Попробуй ещё раз.');
+   render();return;
+  }
+  record.scheduled=true;
+ }
  c.updatedAt=now().toISOString();
  sessionRated++;
  shown=false;flipped=false;
- if(result.finished){undo=null;finishLesson();}
+ undo={card:cardBefore,lesson:lessonBefore};
+ if(result.finished){undo=null;finishLesson()}
  else save();
  render();
 }
