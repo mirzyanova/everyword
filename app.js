@@ -156,13 +156,40 @@ function drawJoke(){
 }
 let jokeOfVisit=drawJoke();
 function jokeMarkup(){return safe(jokeOfVisit).replaceAll(' — ',String.fromCharCode(10)+'— ')}
+const PRACTICE_EXPLANATIONS={
+ new:'Слова, добавленные сегодня. Если сегодня новых нет — слова из последнего пополнения. Каждое слово проверяется в двух направлениях. Результаты учитываются в расписании повторений.',
+ due:'Слова, которые пора повторить по индивидуальному расписанию. Алгоритм учитывает, насколько хорошо ты их помнишь, и определяет дату следующего повторения.',
+ free:'30 случайных слов из всей коллекции. После завершения можно начать новую практику с другой случайной выборкой. Все результаты учитываются в расписании повторений.',
+ hard:'Слова, которые ты не смогла вспомнить минимум дважды за одно занятие. Здесь можно отдельно потренировать их и улучшить запоминание. Результаты также учитываются в общем расписании.',
+ shelf:'Занятие только со словами из выбранной тематической полки. Результаты влияют на общее расписание повторений, как и в других практиках.'
+};
+function modeInfo(kind){
+ const desc=PRACTICE_EXPLANATIONS[kind]||'';
+ return '<details class="mode-info"><summary aria-label="Информация о практике" title="О практике"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg></summary><div class="mode-info-text" role="note">'+safe(desc)+'</div></details>';
+}
+const PRAISES=[
+ 'Отличная работа!','Хорошо справилась!','Ты молодец — занятие завершено.',
+ 'Здорово поработала.','Вот это настойчивость!','Очень достойно!',
+ 'Хороший результат!','Так держать!','Получилось отлично.',
+ 'Супер, ещё одно занятие позади.','Классно справилась!','Прекрасно поработала.',
+ 'Ты отлично потрудилась.','Ещё одна практика завершена — молодец!',
+ 'Хорошая работа сегодня.','Умница, довела занятие до конца.'
+];
+function nextPraise(){
+ const last=Number(localStorage.getItem('everyword-last-praise-v1'));
+ const options=PRAISES.map((_,i)=>i).filter(i=>i!==last);
+ const choice=options[Math.floor(Math.random()*options.length)];
+ try{localStorage.setItem('everyword-last-praise-v1',String(choice))}catch{}
+ return PRAISES[choice];
+}
 function home(){
- const s=stats(),[good,bad]=tally(),streak=streakDays(),group=latestAddedGroup();
+ const s=stats(),streak=streakDays(),group=latestAddedGroup();
  return '<div class="streak-strip"><span class="streak-flame" aria-hidden="true">✦</span><div><strong>'+streak+' '+(streak===1?'день':streak%10>=2&&streak%10<=4&&(streak%100<12||streak%100>14)?'дня':'дней')+' подряд</strong><span>без пропусков занятий</span></div></div>'+
  '<section class="home-heading"><div class="eyebrow">Личное пространство</div><h1 class="home-title"><span class="home-title-lead">Английский,</span><span class="home-title-tail">в своём ритме</span></h1><p class="muted home-subtitle">Все слова в одном месте. Возвращайся к ним на пути к европейскому паспорту.</p><span class="home-sun" aria-hidden="true"></span></section>'+
  '<div class="stats"><div class="stat"><span>В коллекции</span><b>'+s.all+'</b><span>слов и выражений</span></div><div class="stat"><span>Последнее пополнение</span><b>'+group.cards.length+'</b><span>для нового занятия</span></div><div class="stat"><span>Сложные слова</span><b>'+s.hard+'</b><span>для повторения</span></div></div>'+
- '<section class="new-words-hero"><div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day)+' · '+group.cards.length+' '+(group.cards.length===1?'слово':'слов')+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
- '<div class="practice-mode-grid"><section class="practice-mode-card"><div class="eyebrow">БЕЗ ОГРАНИЧЕНИЙ</div><h2>Свободная практика</h2><p>Все слова из твоей коллекции, в случайном порядке.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard"><div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
+ '<section class="new-words-hero practice-with-info">'+modeInfo('new')+'<div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day)+' · '+group.cards.length+' '+(group.cards.length===1?'слово':'слов')+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
+ '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ПО РАСПИСАНИЮ FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' к повторению':'Все запланированные повторения выполнены')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
+ '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">БЕЗ ОГРАНИЧЕНИЙ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="add-words-strip"><div><div class="eyebrow">ПОПОЛНИ КОЛЛЕКЦИЮ</div><h2>Появились новые слова?</h2><p class="muted">Сохрани их и возвращайся к ним в следующих занятиях.</p></div><button class="secondary" data-page="add">＋ Добавить слова</button></section>'+
  '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
 }
