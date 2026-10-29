@@ -120,15 +120,34 @@ function begin(kind='new',shelfId=null){
  practice=kind!=='new';sessionRated=0;undo=null;shown=false;flipped=false;page='study';render();
 }
 
+const NAV_MENU=[
+ ['home','Главная'],['study','Учить слова'],['library','Мои слова'],
+ ['add','Добавить'],['shelves','Полка'],['settings','Настройки']
+];
+const NAV_ICONS={
+ home:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 21v-7h6v7"/>',
+ study:'<path d="M12 7v14"/><path d="M3 18V5a2 2 0 0 1 2-2h4a3 3 0 0 1 3 3v15"/><path d="M21 18V5a2 2 0 0 0-2-2h-4a3 3 0 0 0-3 3"/><path d="M3 18a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3"/><path d="M21 18a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3"/>',
+ library:'<rect x="4" y="4" width="4" height="16" rx="1"/><rect x="10" y="4" width="4" height="16" rx="1"/><path d="m17 6 3 13"/><path d="m16 6 3-1 3 13-3 1"/>',
+ add:'<path d="M12 5v14"/><path d="M5 12h14"/>',
+ shelves:'<rect x="3" y="4" width="7" height="7" rx="1.2"/><rect x="14" y="4" width="7" height="7" rx="1.2"/><rect x="3" y="15" width="7" height="6" rx="1.2"/><rect x="14" y="15" width="7" height="6" rx="1.2"/>',
+ settings:'<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12"/>',
+ account:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="9" r="3"/><path d="M5.5 19a7 7 0 0 1 13 0"/>'
+};
+function navIcon(kind){
+ return '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+NAV_ICONS[kind]+'</svg>';
+}
+function navButton(kind,label){
+ return '<button type="button" data-page="'+kind+'" class="'+(page===kind?'active':'')+'">'+navIcon(kind)+'<span class="nav-label">'+label+'</span></button>';
+}
 function sidebar(){
-  const menus=[['home','⌂ Главная'],['study','◇ Учить слова'],['library','▤ Мои слова'],['add','＋ Добавить'],['shelves','▦ Полка'],['settings','⚙ Настройки']];
-  return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav">'+
-    menus.map(([p,t])=>'<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+
-    '<div class="nav-account"><button data-page="account" class="'+(page==='account'?'active':'')+'">◎ Аккаунт</button><span class="account-hint">'+(cloud.signedIn?'Вход выполнен':'Войти и сохранить прогресс')+'</span></div></nav></aside>';
+ return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav">'+
+ NAV_MENU.map(([kind,label])=>navButton(kind,label)).join('')+
+ '<div class="nav-account">'+navButton('account','Аккаунт')+
+ '<span class="account-hint">'+(cloud.signedIn?'Вход выполнен':'Войти и сохранить прогресс')+'</span></div></nav></aside>';
 }
 function mobile(){
-  return '<nav class="mobile">'+[['home','⌂ Главная'],['study','◇ Учить'],['library','▤ Слова'],['add','＋ Добавить'],['shelves','▦ Полка'],['account','◎ Аккаунт']].map(([p,t])=>
-    '<button data-page="'+p+'" class="'+(page===p?'active':'')+'">'+t+'</button>').join('')+'</nav>';
+ const menus=[['home','Главная'],['study','Учить'],['library','Слова'],['add','Добавить'],['shelves','Полка'],['account','Аккаунт']];
+ return '<nav class="mobile">'+menus.map(([kind,label])=>navButton(kind,label)).join('')+'</nav>';
 }
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
 const JOKE_ROTATION_KEY='everyword-jokes-rotation-v1';
@@ -160,7 +179,7 @@ const PRACTICE_EXPLANATIONS={
  new:'Слова, добавленные сегодня. Если сегодня новых нет — слова из последнего пополнения. Каждое слово проверяется в двух направлениях. Результаты учитываются в расписании повторений.',
  due:'Слова, которые пора повторить по индивидуальному расписанию. Алгоритм учитывает, насколько хорошо ты их помнишь, и определяет дату следующего повторения.',
  free:'30 случайных слов из всей коллекции. После завершения можно начать новую практику с другой случайной выборкой. Все результаты учитываются в расписании повторений.',
- hard:'Слова, которые ты не смогла вспомнить минимум дважды за одно занятие. Здесь можно отдельно потренировать их и улучшить запоминание. Результаты также учитываются в общем расписании.',
+ hard:'Слова, которые не удалось вспомнить хотя бы один раз за занятие. Здесь можно отдельно потренировать их и улучшить запоминание. Результаты также учитываются в общем расписании.',
  shelf:'Занятие только со словами из выбранной тематической полки. Результаты влияют на общее расписание повторений, как и в других практиках.'
 };
 function modeInfo(kind){
