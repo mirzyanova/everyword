@@ -1,5 +1,5 @@
-// Everyword lesson engine: both translation directions, randomized presentation,
-// with three successful follow-up recalls after a mistake on either direction.
+// Everyword lesson engine. Each word appears once in each direction before
+// additional repetitions; keep the directions well separated when possible.
 export function shuffled(items,random=Math.random){
   const result=[...items];
   for(let i=result.length-1;i>0;i--){
@@ -15,8 +15,35 @@ export function makeLesson(cards,kind,random=Math.random){
     en:{correct:0,required:1,first:null,asked:0},
     misses:0
   };
-  const tasks=shuffled(cards.flatMap(c=>[{id:c.id,side:'ru'},{id:c.id,side:'en'}]),random);
-  return {kind,records,tasks,answerCount:0,cardIds:cards.map(c=>c.id),completed:false};
+  // Randomize the cards independently of their original order and date of import.
+  // Separate RU and EN presentations by several different words, rather than
+  // placing two sides of one word next to each other by chance.
+  const firstOrder=shuffled(cards,random);
+  const firstSide=new Map();
+  const leadingSide=random()<.5?'ru':'en';
+  const firstTasks=firstOrder.map((c,i)=>{
+    const side=i%2===0?leadingSide:(leadingSide==='ru'?'en':'ru');
+    firstSide.set(c.id,side);
+    return {id:c.id,side};
+  });
+  const remaining=shuffled(firstOrder,random);
+  const secondTasks=[];
+  const spacing=Math.min(6,Math.floor(cards.length/2));
+  while(remaining.length){
+    const position=cards.length+secondTasks.length;
+    const eligible=remaining.filter(c=>{
+      const firstIndex=firstOrder.findIndex(x=>x.id===c.id);
+      return position-firstIndex>spacing;
+    });
+    const choices=eligible.length?eligible:remaining;
+    const previous=secondTasks.at(-1)?.side||firstTasks.at(-1)?.side;
+    const opposite=choices.filter(c=>firstSide.get(c.id)===previous);
+    const pool=opposite.length?opposite:choices;
+    const picked=pool[Math.floor(random()*pool.length)];
+    secondTasks.push({id:picked.id,side:firstSide.get(picked.id)==='ru'?'en':'ru'});
+    remaining.splice(remaining.findIndex(c=>c.id===picked.id),1);
+  }
+  return {kind,records,tasks:[...firstTasks,...secondTasks],answerCount:0,cardIds:cards.map(c=>c.id),completed:false,recent:[]};
 }
 export function answerLesson(lesson,remembered,random=Math.random){
   if(!lesson||lesson.completed||!lesson.tasks.length)return null;
@@ -30,17 +57,39 @@ export function answerLesson(lesson,remembered,random=Math.random){
   if(remembered)side.correct++;
   else {
     record.misses++;
+    // Three successful recalls AFTER the latest miss in this direction.
+    side.correct=0;
     side.required=3;
   }
+  lesson.recent=Array.isArray(lesson.recent)?lesson.recent:[];
+  lesson.recent.push(task.id);
+  if(lesson.recent.length>6)lesson.recent.shift();
   const pending=side.correct<side.required;
   if(pending){
-    // Other cards/directions are encountered first when available.
-    const minIndex=Math.min(2,lesson.tasks.length);
-    const index=minIndex+Math.floor(random()*(lesson.tasks.length-minIndex+1));
-    lesson.tasks.splice(index,0,task);
+    const delay=Math.min(6,Math.max(2,Math.floor(lesson.cardIds.length/4)),lesson.tasks.length);
+    const candidates=[];
+    for(let i=delay;i<=lesson.tasks.length;i++){
+      const prev=lesson.tasks.slice(Math.max(0,i-5),i).map(t=>t.id);
+      const next=lesson.tasks.slice(i,i+5).map(t=>t.id);
+      // Prefer placements far from another presentation of this same word.
+      const score=Math.min(
+        prev.lastIndexOf(task.id)<0?6:prev.length-1-prev.lastIndexOf(task.id),
+        next.indexOf(task.id)<0?6:next.indexOf(task.id)
+      );
+      candidates.push({i,score});
+    }
+    const best=Math.max(...candidates.map(x=>x.score));
+    const options=candidates.filter(x=>x.score>=Math.max(0,best-1));
+    const position=options[Math.floor(random()*options.length)].i;
+    lesson.tasks.splice(position,0,task);
+  }
+  // Never show the same word back-to-back if another word is available.
+  if(lesson.tasks.length>1&&lesson.tasks[0].id===task.id){
+    const alternate=lesson.tasks.findIndex(t=>t.id!==task.id);
+    if(alternate>0)[lesson.tasks[0],lesson.tasks[alternate]]=[lesson.tasks[alternate],lesson.tasks[0]];
   }
   if(!lesson.tasks.length)lesson.completed=true;
-  return {task,remembered,finished:lesson.completed,newlyHard:record.misses===2&&!remembered,remaining:lesson.tasks.length};
+  return {task,remembered,finished:lesson.completed,newlyHard:record.misses===1&&!remembered,remaining:lesson.tasks.length};
 }
 export function skipLesson(lesson){
   if(!lesson||lesson.tasks.length<=1)return false;
