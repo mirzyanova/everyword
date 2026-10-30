@@ -668,7 +668,7 @@ document.addEventListener('click',e=>{
    const group=b.dataset.navGroup;
    const wasOpen=navExpanded===group;
    navExpanded=wasOpen?null:group;
-   mobileNavExpanded=wasOpen&&mobileNavExpanded===group?null:group;
+   mobileNavExpanded=mobileNavExpanded===group?null:group;
    render();return;
  }
  if(b.dataset.page){
