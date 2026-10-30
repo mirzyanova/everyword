@@ -165,7 +165,7 @@ export const CONTEXT_BANK={
   ],
   "take for granted": [
     [
-      "We shouldn't take our friends for granted.",
+      "We often take for granted the people who help us.",
       "Нам не стоит воспринимать друзей как должное."
     ],
     "verb"
@@ -294,7 +294,16 @@ export function createWordExercise(cards,pool,random=Math.random){
     const distractors=[...randomize(sameGroup,random),...randomize(allOthers.filter(c=>!sameGroup.some(z=>z.id===c.id)),random)]
       .filter((c,i,arr)=>arr.findIndex(x=>norm(x.en)===norm(c.en))===i)
       .slice(0,3).map(c=>c.en);
-    const options=randomize([item.card.en,...distractors],random);
+    const extra=Object.entries(CONTEXT_BANK)
+      .filter(([key,val])=>key!==norm(item.card.en)&&val[1]===item.group)
+      .map(([key])=>key);
+    const allFallback=Object.keys(CONTEXT_BANK).filter(key=>key!==norm(item.card.en));
+    const filled=[...distractors];
+    for(const alternative of [...randomize(extra,random),...randomize(allFallback,random)]){
+      if(filled.length>=3)break;
+      if(alternative!==norm(item.card.en)&&!filled.some(x=>norm(x)===alternative))filled.push(alternative);
+    }
+    const options=randomize([item.card.en,...filled],random);
     items.push({id:item.card.id+'-'+i,cardId:item.card.id,expression:item.card.en,
       translation:context.translation,before:context.before,after:context.after,
       sentence:context.text,options,correctIndex:options.findIndex(x=>norm(x)===norm(item.card.en)),
