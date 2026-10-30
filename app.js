@@ -686,6 +686,38 @@ document.addEventListener('click',e=>{
  else if(a==='practice')begin('free');
  else if(a==='due')begin('due');
  else if(a==='hard')begin('hard');
+ else if(a==='word-ex-start')startWordExercise();
+ else if(a==='word-ex-back'){wordExercise=null;wordPopup=null;page='word-exercises';render()}
+ else if(a==='word-ex-restart')startWordExercise();
+ else if(a==='word-ex-reveal'){if(wordExercise&&!wordExercise.answers[wordExercise.index]){wordExercise.reveal=true;render()}}
+ else if(a==='word-ex-answer'){
+   const ex=wordExercise;if(!ex||!ex.reveal||ex.answers[ex.index])return;
+   const item=ex.items[ex.index],choice=Number(b.dataset.choice);
+   if(!Number.isInteger(choice)||choice<0||choice>=item.options.length)return;
+   ex.answers.push({choice,correct:choice===item.correctIndex,expression:item.expression});
+   wordPopup=null;render();
+ }
+ else if(a==='word-ex-next'){
+   if(!wordExercise||!wordExercise.answers[wordExercise.index])return;
+   wordExercise.index++;wordExercise.reveal=false;wordPopup=null;
+   if(wordExercise.index===wordExercise.items.length){
+     wordExercise.praise=nextPraise();
+     if(!Array.isArray(state.practices))state.practices=[];
+     state.practices.push({id:id(),day:today(),kind:'word-exercise',at:now().toISOString()});
+     save();
+   }
+   render();
+ }
+ else if(a==='word-ex-speak'){const item=wordExercise?.items?.[wordExercise.index];if(item)speakEnglish(item.sentence)}
+ else if(a==='word-lookup')lookupWord(b.dataset.word);
+ else if(a==='word-lookup-close'){wordPopup=null;render()}
+ else if(a==='word-add'){
+   if(!wordPopup||wordPopup.loading)return;
+   const item=wordExercise?.items?.[wordExercise.index];
+   wordAddDraft={en:wordPopup.word,ru:wordPopup.ru||'',example:item?.sentence||'',exampleRu:item?.translation||'',note:wordPopup.note||''};
+   render();
+ }
+ else if(a==='word-add-cancel'){wordAddDraft=null;render()}
  else if(a==='rule-new'){ruleEditId='new';ruleDeleteConfirm=false;page='rules';render()}
  else if(a==='rule-open'){if(activeRules().some(r=>r.id===b.dataset.id)){ruleOpenId=b.dataset.id;grammarQuiz=null;page='rules';render()}}
  else if(a==='rule-back'){ruleOpenId=null;grammarQuiz=null;page='rules';render()}
@@ -769,6 +801,14 @@ document.addEventListener('submit',e=>{
    save();editId=null;deleteConfirm=false;render();notify('Карточка обновлена');
    return;
  }
+ if(e.target.id==='word-add-editor'){
+   e.preventDefault();
+   const data=new FormData(e.target);
+   const parts=['ru','en','example','exampleRu','note'].map(k=>String(data.get(k)||'').trim());
+   if(!parts[0]||!parts[1]){notify('Заполни значение и английское слово');return}
+   if(!add(...parts)){notify('Такая карточка уже есть в словаре');return}
+   wordAddDraft=null;wordPopup=null;save();render();notify('Слово добавлено в коллекцию');return;
+ }
  if(e.target.id==='rule-editor'){
    e.preventDefault();
    const data=new FormData(e.target),title=String(data.get('title')||'').trim(),
@@ -819,6 +859,8 @@ document.addEventListener('input',e=>{
 });
 document.addEventListener('change',e=>{
  if(e.target.id==='import')importData(e.target.files?.[0]);
+ else if(e.target.id==='word-ex-source'){wordExerciseSource=e.target.value;render()}
+ else if(e.target.id==='word-ex-shelf'){wordExerciseShelf=e.target.value;render()}
  else if(e.target.matches('[data-shelf-card]')&&shelfDraft){
    const cardId=e.target.dataset.shelfCard;
    if(e.target.checked)shelfDraft.selected.add(cardId);else shelfDraft.selected.delete(cardId);
