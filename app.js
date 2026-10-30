@@ -547,6 +547,22 @@ document.addEventListener('click',e=>{
  else if(a==='practice')begin('free');
  else if(a==='due')begin('due');
  else if(a==='hard')begin('hard');
+ else if(a==='rule-new'){ruleEditId='new';ruleDeleteConfirm=false;page='rules';render()}
+ else if(a==='rule-open'){if(activeRules().some(r=>r.id===b.dataset.id)){ruleOpenId=b.dataset.id;grammarQuiz=null;page='rules';render()}}
+ else if(a==='rule-back'){ruleOpenId=null;grammarQuiz=null;page='rules';render()}
+ else if(a==='rule-practice')startRuleQuiz(b.dataset.id);
+ else if(a==='rule-answer')answerRuleQuiz(Number(b.dataset.choice));
+ else if(a==='rule-next')nextRuleQuestion();
+ else if(a==='rule-quit'){grammarQuiz=null;page='rules';render()}
+ else if(a==='rule-edit'){if(activeRules().some(r=>r.id===b.dataset.id)){ruleEditId=b.dataset.id;ruleDeleteConfirm=false;render()}}
+ else if(a==='rule-edit-close'){ruleEditId=null;ruleDeleteConfirm=false;render()}
+ else if(a==='rule-ask-delete'){ruleDeleteConfirm=true;render()}
+ else if(a==='rule-cancel-delete'){ruleDeleteConfirm=false;render()}
+ else if(a==='rule-delete'){
+   const rule=activeRules().find(r=>r.id===ruleEditId);
+   if(rule){rule.deletedAt=now().toISOString();rule.updatedAt=rule.deletedAt;save()}
+   ruleEditId=null;ruleOpenId=null;grammarQuiz=null;ruleDeleteConfirm=false;page='rules';render();notify('Правило удалено');
+ }
  else if(a==='shelf-start'){const sh=activeShelves().find(x=>x.id===b.dataset.id);if(sh)begin('shelf',sh.id)}
  else if(a==='shelf-new')openShelfEditor();
  else if(a==='shelf-edit'){const sh=activeShelves().find(x=>x.id===b.dataset.id);if(sh)openShelfEditor(sh)}
@@ -613,6 +629,25 @@ document.addEventListener('submit',e=>{
    c.updatedAt=now().toISOString();
    save();editId=null;deleteConfirm=false;render();notify('Карточка обновлена');
    return;
+ }
+ if(e.target.id==='rule-editor'){
+   e.preventDefault();
+   const data=new FormData(e.target),title=String(data.get('title')||'').trim(),
+     summary=String(data.get('summary')||'').trim(),explanation=String(data.get('explanation')||'').trim();
+   if(!title||!explanation){notify('Нужны название и объяснение правила.');return}
+   const examples=String(data.get('examples')||'').split(/\r?\n/).map(line=>{
+     const parts=line.split('|');return {en:String(parts.shift()||'').trim(),ru:parts.join('|').trim()};
+   }).filter(item=>item.en);
+   let rule=activeRules().find(r=>r.id===ruleEditId);
+   if(rule){Object.assign(rule,{title,summary,explanation,examples,updatedAt:now().toISOString()})}
+   else{
+     const at=now().toISOString();
+     rule={id:id(),title,summary,explanation,examples,questions:[],quizHistory:[],createdAt:at,updatedAt:at};
+     if(!Array.isArray(state.rules))state.rules=[];
+     state.rules.push(rule);
+   }
+   ruleEditId=null;ruleDeleteConfirm=false;ruleOpenId=rule.id;grammarQuiz=null;page='rules';
+   save();render();notify('Правило сохранено');return;
  }
  if(e.target.id==='shelf-editor'){
    e.preventDefault();
