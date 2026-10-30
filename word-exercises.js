@@ -278,6 +278,12 @@ export function createWordExercise(cards,pool,random=Math.random){
   const usable=candidates.map(card=>{
     const key=norm(card.en),bank=CONTEXT_BANK[key];
     const contexts=[];
+    // The English tutor may save additional reviewed examples per card.
+    for(const item of Array.isArray(card.exerciseExamples)?card.exerciseExamples:[]){
+      if(!item||typeof item.en!=='string')continue;
+      const gap=gapFor(item.en,card.en);
+      if(gap)contexts.push({...gap,text:item.en,translation:String(item.ru||''),origin:'tutor'});
+    }
     if(bank){const gap=gapFor(bank[0][0],card.en);if(gap)contexts.push({...gap,text:bank[0][0],translation:bank[0][1],origin:'prepared'})}
     if(card.example){const gap=gapFor(card.example,card.en);if(gap)contexts.push({...gap,text:card.example,translation:card.exampleRu||'',origin:'saved'})}
     return {card,contexts,group:bank?.[1]||'other'};
