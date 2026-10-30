@@ -297,6 +297,99 @@ function shelfEditor(){
  (old?(shelfDeleteConfirm?'<div class="delete-confirm"><p>Удалить полку? Сами карточки останутся в общей коллекции.</p><button class="delete-button" data-action="shelf-delete">Да, удалить полку</button><button class="link" data-action="shelf-cancel-delete">Оставить</button></div>':'<button class="delete-link" data-action="shelf-ask-delete">Удалить полку</button>'):'')+
  '</section></div>';
 }
+
+function rulePage(){
+ if(grammarQuiz)return ruleQuizPage();
+ const rule=activeRules().find(r=>r.id===ruleOpenId);
+ if(rule){
+  const examples=Array.isArray(rule.examples)?rule.examples:[];
+  const questions=Array.isArray(rule.questions)?rule.questions.filter(q=>q&&Array.isArray(q.options)&&q.options.length>=3&&Number.isInteger(q.correctIndex)&&q.correctIndex>=0&&q.correctIndex<q.options.length):[];
+  return '<div class="rule-back"><button class="link" data-action="rule-back">← Все правила</button></div>'+
+   heading('МОЙ СПРАВОЧНИК',safe(rule.title),safe(rule.summary||''))+
+   '<article class="panel rule-detail"><div class="eyebrow">ОБЪЯСНЕНИЕ</div><div class="rule-explanation">'+safe(rule.explanation||'Правило пока без объяснения.').replace(/\n/g,'<br>')+'</div>'+
+   (examples.length?'<h2>Примеры</h2><div class="rule-examples">'+examples.map(item=>'<div class="rule-example"><strong>'+safe(item.en||'')+'</strong><span>'+safe(item.ru||'')+'</span></div>').join('')+'</div>':'')+
+   '</article>'+
+   '<section class="panel rule-practice-card"><div class="eyebrow">ЗАКРЕПИТЬ ПРАВИЛО</div><h2>Составить упражнения</h2><p class="muted">'+(questions.length?'Подготовлено '+questions.length+' вопросов с похожими вариантами и пояснением после ответа. При новом запуске порядок меняется.':'Для этого правила ещё нет подготовленных заданий. Попроси ChatGPT дополнить правило 5–7 вопросами.')+'</p>'+
+   '<button class="primary" data-action="rule-practice" data-id="'+safe(rule.id)+'" '+(!questions.length?'disabled':'')+'>Начать упражнения →</button></section>'+
+   '<div class="rule-footer-actions"><button class="secondary" data-action="rule-edit" data-id="'+safe(rule.id)+'">Редактировать правило</button><button class="link" data-action="rule-back">Вернуться к правилам</button></div>';
+ }
+ const list=activeRules().slice().sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+ return heading('МОЯ ГРАММАТИКА','Правила','Место для грамматики, которую ты уже разобрала. Вернись к объяснению в любой момент и потренируйся на примерах.')+
+  '<div class="shelf-toolbar"><span class="muted">Сохранено правил: '+list.length+'</span><button class="primary" data-action="rule-new">＋ Добавить правило</button></div>'+
+  (list.length?'<div class="rule-grid">'+list.map(r=>'<article class="rule-tile"><div class="rule-tile-icon">'+navIcon('rules')+'</div><h2>'+safe(r.title)+'</h2><p>'+safe(r.summary||'Короткое объяснение и примеры')+'</p><div class="rule-tile-actions"><button class="secondary" data-action="rule-open" data-id="'+safe(r.id)+'">Открыть правило →</button></div></article>').join('')+'</div>':
+  '<div class="shelf-welcome"><div class="shelf-welcome-icon" aria-hidden="true">▤</div><h2>Собирай правила в одном месте</h2><p>Обсуди грамматику с ChatGPT и попроси добавить правило в Everyword. Или сохрани объяснение самостоятельно.</p><button class="primary" data-action="rule-new">Добавить первое правило</button></div>')+
+  '<p class="rule-help muted">Правила синхронизируются с твоим аккаунтом. Упражнения можно добавлять к правилам из ChatGPT без ручного копирования.</p>';
+}
+function ruleQuizPage(){
+ const qz=grammarQuiz,rule=activeRules().find(r=>r.id===qz.ruleId);
+ if(!qz||!rule)return heading('ПРАВИЛА','Упражнения','Правило больше недоступно.');
+ if(qz.index>=qz.items.length){
+  const count=qz.answers.filter(x=>x.correct).length;
+  return heading('ПРАВИЛА',safe(rule.title),'Упражнения завершены')+
+   '<section class="panel rule-finish"><div class="eyebrow">РЕЗУЛЬТАТ</div><h2>'+safe(qz.praise||'Хорошая работа!')+'</h2><div class="rule-score">'+count+' из '+qz.items.length+'</div><p class="muted">Правильных ответов с первой попытки. Разбор каждого ответа был показан после выбора.</p><div class="stack"><button class="primary" data-action="rule-practice" data-id="'+safe(rule.id)+'">Пройти ещё раз →</button><button class="secondary" data-action="rule-quit">К правилу</button></div></section>';
+ }
+ const item=qz.items[qz.index],q=item.question,answered=qz.answers[qz.index];
+ const chosen=answered?.choice;
+ const text=chosen===undefined?'':(chosen===q.correctIndex?
+   String(q.correctExplanation||q.explanation||'Этот вариант подходит к правилу и контексту предложения.'):
+   String(q.wrongExplanations?.[chosen]||q.wrongExplanation||q.explanation||'Этот вариант не подходит. Посмотри на форму и смысл предложения.'));
+ return heading('ПРАВИЛА',safe(rule.title),'Выбери подходящий вариант, затем прочитай объяснение.')+
+  '<div class="rule-back"><button class="link" data-action="rule-quit">← Вернуться к правилу</button></div>'+
+  '<section class="panel rule-quiz"><div class="row"><span class="eyebrow">ВОПРОС '+(qz.index+1)+' ИЗ '+qz.items.length+'</span><span class="muted">Выбери один ответ</span></div>'+
+  '<div class="rule-question">'+safe(q.prompt||'')+'</div>'+
+  '<div class="rule-options">'+item.order.map(n=>{
+    const isSelected=n===chosen,isCorrect=n===q.correctIndex;
+    const cls=answered?(isCorrect?' correct':isSelected?' incorrect':''):'';
+    return '<button type="button" class="rule-option'+cls+'" data-action="rule-answer" data-choice="'+n+'" '+(answered?'disabled':'')+'><span class="option-letter">'+String.fromCharCode(65+item.order.indexOf(n))+'</span><span>'+safe(q.options[n])+'</span></button>';
+  }).join('')+'</div>'+
+  (answered?'<div class="rule-feedback '+(answered.correct?'right':'wrong')+'"><strong>'+(answered.correct?'Верно!':'Не совсем. Правильный ответ: '+safe(q.options[q.correctIndex]))+'</strong><p>'+safe(text)+'</p></div><button class="primary" data-action="rule-next">'+(qz.index+1===qz.items.length?'Завершить упражнение':'Следующий вопрос →')+'</button>':'')+
+  '</section>';
+}
+function startRuleQuiz(ruleId){
+ const rule=activeRules().find(r=>r.id===ruleId);
+ if(!rule)return;
+ const pool=(Array.isArray(rule.questions)?rule.questions:[]).filter(q=>q&&typeof q.prompt==='string'&&Array.isArray(q.options)&&q.options.length>=3&&q.options.length<=5&&Number.isInteger(q.correctIndex)&&q.correctIndex>=0&&q.correctIndex<q.options.length);
+ if(!pool.length){notify('Для этого правила ещё нет подготовленных упражнений.');return}
+ grammarQuiz={ruleId,index:0,answers:[],items:shuffled(pool).slice(0,7).map(q=>({question:q,order:shuffled(q.options.map((_,i)=>i))}))};
+ ruleOpenId=ruleId;page='rules';render();
+}
+function answerRuleQuiz(index){
+ if(!grammarQuiz||grammarQuiz.answers.length>grammarQuiz.index)return;
+ const item=grammarQuiz.items[grammarQuiz.index];
+ if(!item||!Number.isInteger(index)||index<0||index>=item.question.options.length)return;
+ grammarQuiz.answers.push({choice:index,correct:index===item.question.correctIndex});
+ render();
+}
+function nextRuleQuestion(){
+ if(!grammarQuiz||grammarQuiz.answers.length<=grammarQuiz.index)return;
+ grammarQuiz.index++;
+ if(grammarQuiz.index===grammarQuiz.items.length){
+  const rule=activeRules().find(r=>r.id===grammarQuiz.ruleId);
+  if(rule){
+   if(!Array.isArray(rule.quizHistory))rule.quizHistory=[];
+   rule.quizHistory.push({at:now().toISOString(),correct:grammarQuiz.answers.filter(a=>a.correct).length,total:grammarQuiz.items.length});
+   rule.updatedAt=now().toISOString();
+   if(!Array.isArray(state.practices))state.practices=[];
+   state.practices.push({id:id(),day:today(),kind:'grammar',at:now().toISOString()});
+   grammarQuiz.praise=nextPraise();
+   save();
+  }
+ }
+ render();
+}
+function ruleEditor(){
+ const rule=activeRules().find(r=>r.id===ruleEditId),examples=Array.isArray(rule?.examples)?rule.examples:[];
+ return '<div class="overlay"><section class="popup edit-popup rule-edit-popup" role="dialog" aria-modal="true" aria-label="Редактировать правило">'+
+  '<div class="row"><h2>'+(rule?'Редактировать правило':'Новое правило')+'</h2><button class="edit-close" data-action="rule-edit-close" aria-label="Закрыть">×</button></div>'+
+  '<form id="rule-editor"><div class="field"><label>Название *</label><input name="title" required maxlength="120" value="'+safe(rule?.title||'')+'" placeholder="Например, Present Perfect"></div>'+
+  '<div class="field"><label>Коротко: когда используется</label><textarea name="summary" maxlength="350">'+safe(rule?.summary||'')+'</textarea></div>'+
+  '<div class="field"><label>Подробное объяснение *</label><textarea class="rule-explanation-input" name="explanation" required placeholder="Запиши условия, исключения и важные нюансы">'+safe(rule?.explanation||'')+'</textarea></div>'+
+  '<div class="field"><label>Примеры (английский | русский, по одному в строке)</label><textarea name="examples" placeholder="I have already eaten. | Я уже поела.">'+safe(examples.map(x=>x.en+' | '+x.ru).join('\n'))+'</textarea></div>'+
+  '<div class="edit-actions"><button class="primary" type="submit">Сохранить правило</button><button class="secondary" data-action="rule-edit-close" type="button">Отмена</button></div></form>'+
+  (rule?(ruleDeleteConfirm?'<div class="delete-confirm"><p>Удалить правило и связанные с ним упражнения? Слова в словаре не изменятся.</p><button class="delete-button" data-action="rule-delete">Удалить правило</button><button class="link" data-action="rule-cancel-delete">Отмена</button></div>':'<button class="delete-link" data-action="rule-ask-delete">Удалить правило</button>'):'')+
+  '</section></div>';
+}
+
 function addPage(){return heading('НОВЫЕ СЛОВА','Пополнить коллекцию','Добавляй одну карточку или целые списки. В ближайшие занятия попадут все новые слова.')+'<section class="panel" style="margin-top:28px"><form id="single"><div class="grid"><div class="field"><label>Русский смысл *</label><input name="ru" required placeholder="Разобраться"></div><div class="field"><label>Английское выражение *</label><input name="en" required placeholder="figure out"></div><div class="field"><label>Пример на английском</label><input name="example" placeholder="I will figure it out."></div><div class="field"><label>Перевод примера</label><input name="exampleRu"></div></div><div class="field"><label>Пояснение / контекст</label><textarea name="note"></textarea></div><button class="primary">＋ Сохранить карточку</button></form></section><section class="panel" style="margin-top:20px"><h2>Добавить списком</h2><p class="muted">Одна карточка в строке, поля разделяются вертикальной чертой |. Порядок: русский смысл | английское слово | пример EN | перевод примера | пояснение.</p><form id="bulk"><div class="field"><textarea name="bulk" required placeholder="Разобраться | figure out | I will figure it out.&#10;Тем не менее | nevertheless"></textarea></div><button class="secondary">＋ Добавить весь список</button></form></section>'}
 function account(){
   if(cloud.signedIn){
@@ -332,6 +425,7 @@ function render(){
  const content=({home,study,library,add:addPage,shelves:shelfPage,rules:rulePage,settings,account}[page]||home)();
  let popup='';
  if(editId)popup=cardEditor();
+ else if(ruleEditId)popup=ruleEditor();
  else if(shelfDraft)popup=shelfEditor();
  else if(modal==='guest-invite')popup='<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>';
  else if(modal==='congratulations')popup='<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+completedPractices().length+' практики!</b><h2>Так держать!</h2><p class="muted">Ты завершила ещё три занятия. Продолжай в своём ритме!</p><button class="primary" data-action="close">Продолжить →</button></div></div>';
