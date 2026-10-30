@@ -470,7 +470,7 @@ function wordExercisePage(){
  const item=ex.items[ex.index],answer=ex.answers[ex.index],answered=!!answer;
  return heading('УПРАЖНЕНИЯ СО СЛОВАМИ',wordSourceLabel(wordExerciseSource),'Вспомни ответ самостоятельно, а затем выбери вариант без набора текста.')+
  '<div class="rule-back"><button class="link" data-action="word-ex-back">← К выбору слов</button></div>'+
- '<section class="panel wordex-quiz"><div class="row"><span class="eyebrow">ПРЕДЛОЖЕНИЕ '+(ex.index+1)+' ИЗ '+ex.items.length+'</span><button class="wordex-audio" data-action="word-ex-speak" aria-label="Прослушать предложение">♫ Слушать</button></div>'+
+ '<section class="panel wordex-quiz"><div class="row"><span class="eyebrow">ПРЕДЛОЖЕНИЕ '+(ex.index+1)+' ИЗ '+ex.items.length+'</span><button class="wordex-audio" data-action="word-ex-speak" aria-label="Прослушать предложение">'+(answered?'♫ Слушать целиком':'♫ Слушать с пропуском')+'</button></div>'+
  (wordPopup?'<div class="wordex-popover" role="status"><div class="row"><strong>'+safe(wordPopup.word)+'</strong><button class="link" data-action="word-lookup-close" aria-label="Закрыть перевод">×</button></div><p class="wordex-meaning">'+safe(wordPopup.loading?'ИИ подбирает перевод в контексте…':wordPopup.ru||(wordPopup.error?'Точного перевода сейчас нет':'Перевод не найден'))+'</p>'+
  (wordPopup.note?'<p class="muted">'+safe(wordPopup.note)+'</p>':'')+(wordPopup.error?'<p class="wordex-ai-error">'+safe(wordPopup.error)+'</p>':'')+
  '<button class="secondary" data-action="word-add" '+(wordPopup.loading?'disabled':'')+'>＋ Добавить в словарь</button></div>':'')+
@@ -719,6 +719,8 @@ document.addEventListener('click',e=>{
  else if(a==='word-ex-restart')startWordExercise();
  else if(a==='word-ex-reveal'){if(wordExercise&&!wordExercise.answers[wordExercise.index]){wordExercise.reveal=true;render()}}
  else if(a==='word-ex-answer'){
+   wordAudioToken++;
+   if(typeof window.speechSynthesis!=='undefined')window.speechSynthesis.cancel();
    const ex=wordExercise;if(!ex||!ex.reveal||ex.answers[ex.index])return;
    const item=ex.items[ex.index],choice=Number(b.dataset.choice);
    if(!Number.isInteger(choice)||choice<0||choice>=item.options.length)return;
