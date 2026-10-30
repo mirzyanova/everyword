@@ -262,6 +262,22 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
       setStatus('error');
     } finally { syncing = false; }
   }
+  api.translateWordInContext = async function(word,context){
+    if(!user||!ready||!client)throw Object.assign(new Error('Войди в аккаунт Everyword, чтобы использовать ИИ-перевод.'),{code:'SIGN_IN_REQUIRED'});
+    const {data,error}=await client.functions.invoke('everyword-word-meaning',{body:{word,context}});
+    if(error){
+      let message='Не удалось получить перевод по контексту.';
+      let code='AI_UNAVAILABLE';
+      try{
+        const details=await error.context?.json?.();
+        if(typeof details?.error==='string')message=details.error;
+        if(typeof details?.code==='string')code=details.code;
+      }catch{}
+      throw Object.assign(new Error(message),{code});
+    }
+    if(!data||typeof data.ru!=='string'||!data.ru.trim())throw Object.assign(new Error('ИИ вернул пустой перевод'),{code:'EMPTY_AI_OUTPUT'});
+    return {ru:data.ru.trim(),note:String(data.note||'').trim(),lemma:String(data.lemma||word).trim(),source:'ai'};
+  };
   api.localChange = function() {
     if (!ready || !user) return;
     clearTimeout(saveTimer);
