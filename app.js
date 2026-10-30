@@ -412,6 +412,113 @@ function ruleEditor(){
   '</section></div>';
 }
 
+
+function ruleExercisesIndex(){
+ const list=activeRules().filter(r=>Array.isArray(r.questions)&&r.questions.length);
+ return heading('ПРАВИЛА','Упражнения по правилам','Выбери тему и пройди подготовленные задания с разбором каждого ответа.')+
+ (list.length?'<div class="rule-grid">'+list.map(r=>'<section class="rule-tile"><h2>'+safe(r.title)+'</h2><p>'+r.questions.length+' заданий</p><button class="secondary" data-action="rule-practice" data-id="'+safe(r.id)+'">Начать →</button></section>').join('')+'</div>':
+ '<div class="shelf-welcome"><h2>Пока нет подготовленных заданий</h2><p>Добавь правило с упражнениями через ChatGPT.</p><button class="secondary" data-page="rules">Мои правила →</button></div>');
+}
+function wordSourceCards(source,shelfId){
+ const all=activeCards();
+ if(source==='new')return latestAddedGroup().cards;
+ if(source==='hard')return all.filter(c=>c.difficult);
+ if(source==='due')return all.filter(c=>c.fsrs&&due(c));
+ if(source==='shelf')return all.filter(c=>activeShelves().find(sh=>sh.id===shelfId)?.cardIds.includes(c.id));
+ return all;
+}
+function wordSourceLabel(source){
+ return {new:'Новые слова',all:'Случайные слова',hard:'Сложные слова',due:'Пора повторить',shelf:'Слова из полки'}[source]||'Все слова';
+}
+function startWordExercise(){
+ const pool=wordSourceCards(wordExerciseSource,wordExerciseShelf);
+ if(!pool.length){notify('В этой группе пока нет слов.');return}
+ const result=createWordExercise(activeCards(),pool);
+ if(!result.items.length){notify('Для выбранных слов пока нет подходящих предложений.');return}
+ wordExercise={items:result.items,index:0,answers:[],reveal:false,praise:null};
+ wordPopup=null;page='word-exercises';navExpanded='words';mobileNavExpanded=null;render();
+}
+function wordClickable(text){
+ return String(text||'').split(/([A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ]+)*)/g).map(part=>
+ /^[A-Za-zÀ-ÖØ-öø-ÿ]+(?:['’][A-Za-zÀ-ÖØ-öø-ÿ]+)*$/.test(part)?
+ '<button type="button" class="word-lookup-token" data-action="word-lookup" data-word="'+safe(part)+'" title="Посмотреть перевод">'+safe(part)+'</button>':
+ safe(part)).join('');
+}
+function wordExercisePage(){
+ if(!wordExercise){
+  const opts=[['new','Новые слова'],['all','Случайные слова'],['hard','Сложные слова'],['due','Пора повторить'],['shelf','Выбрать полку']];
+  const count=wordSourceCards(wordExerciseSource,wordExerciseShelf).length;
+  return heading('ПРАКТИКА В КОНТЕКСТЕ','Упражнения со словами','Прочитай предложение, вспомни выражение, затем выбери вариант ответа.')+
+  '<section class="panel wordex-config"><div class="eyebrow">ЗАНЯТИЕ</div><h2>10 предложений из твоего словаря</h2>'+
+  '<div class="field"><label for="word-ex-source">Какие слова потренировать?</label><select id="word-ex-source" class="wordex-select">'+opts.map(([id,label])=>'<option value="'+id+'" '+(wordExerciseSource===id?'selected':'')+'>'+label+'</option>').join('')+'</select></div>'+
+  (wordExerciseSource==='shelf'?'<div class="field"><label for="word-ex-shelf">Выбери полку</label><select id="word-ex-shelf" class="wordex-select"><option value="">Выбрать…</option>'+activeShelves().map(sh=>'<option value="'+safe(sh.id)+'" '+(wordExerciseShelf===sh.id?'selected':'')+'>'+safe(sh.title)+'</option>').join('')+'</select></div>':'')+
+  '<p class="wordex-count">'+count+' слов в группе'+(count>0&&count<10?' · некоторые встретятся больше одного раза':'')+'</p>'+
+  '<button class="primary" data-action="word-ex-start" '+(!count?'disabled':'')+'>Начать 10 предложений →</button></section>'+
+  '<p class="wordex-note">Сейчас используются подготовленные предложения и примеры из твоих карточек. Автоматическое создание новых примеров с помощью ИИ ещё не подключено.</p>';
+ }
+ const ex=wordExercise;
+ if(ex.index>=ex.items.length){
+  const correct=ex.answers.filter(a=>a.correct).length;
+  const difficult=[...new Set(ex.answers.filter(a=>!a.correct).map(a=>a.expression))];
+  return heading('УПРАЖНЕНИЯ СО СЛОВАМИ','Практика завершена','Результат сохранён отдельно от FSRS.')+
+  '<section class="panel wordex-finish"><div class="eyebrow">ОТЛИЧНАЯ РАБОТА</div><h2>'+safe(ex.praise||'Хорошо поработала!')+'</h2><div class="rule-score">'+correct+' из '+ex.items.length+'</div><p class="muted">Правильных ответов с первой попытки</p>'+
+  '<p class="muted">Вызвали сложности: '+difficult.length+(difficult.length?' · '+safe(difficult.join(', ')):' · все ответы правильные!')+'</p>'+
+  '<div class="stack"><button class="primary" data-action="word-ex-restart">Ещё 10 предложений →</button><button class="secondary" data-action="word-ex-back">Выбрать слова</button></div></section>';
+ }
+ const item=ex.items[ex.index],answer=ex.answers[ex.index],answered=!!answer;
+ return heading('УПРАЖНЕНИЯ СО СЛОВАМИ',wordSourceLabel(wordExerciseSource),'Вспомни ответ самостоятельно, а затем выбери вариант без набора текста.')+
+ '<div class="rule-back"><button class="link" data-action="word-ex-back">← К выбору слов</button></div>'+
+ '<section class="panel wordex-quiz"><div class="row"><span class="eyebrow">ПРЕДЛОЖЕНИЕ '+(ex.index+1)+' ИЗ '+ex.items.length+'</span><button class="wordex-audio" data-action="word-ex-speak" aria-label="Прослушать предложение">♫ Слушать</button></div>'+
+ (wordPopup?'<div class="wordex-popover" role="status"><div class="row"><strong>'+safe(wordPopup.word)+'</strong><button class="link" data-action="word-lookup-close" aria-label="Закрыть перевод">×</button></div><p class="wordex-meaning">'+safe(wordPopup.loading?'Ищу перевод…':wordPopup.ru||'Перевод не найден')+'</p>'+
+ (wordPopup.note?'<p class="muted">'+safe(wordPopup.note)+'</p>':'')+
+ '<button class="secondary" data-action="word-add" '+(wordPopup.loading?'disabled':'')+'>＋ Добавить в словарь</button></div>':'')+
+ '<div class="wordex-sentence">'+wordClickable(item.before)+'<span class="wordex-gap">'+(answered?wordClickable(item.expression):'________')+'</span>'+wordClickable(item.after)+'</div>'+
+ '<p class="wordex-translate-hint">Коснись любого английского слова, чтобы посмотреть перевод.</p>'+
+ (!ex.reveal?'<div class="wordex-before"><p>Сначала попробуй произнести недостающее слово или выражение вслух.</p><button class="secondary" data-action="word-ex-reveal">Выбрать ответ →</button></div>':
+ '<div class="rule-options wordex-options">'+item.options.map((option,index)=>
+ '<button class="rule-option'+(answered?(index===item.correctIndex?' correct':answer.choice===index?' incorrect':''):'')+'" data-action="word-ex-answer" data-choice="'+index+'" '+(answered?'disabled':'')+'><span class="option-letter">'+String.fromCharCode(65+index)+'</span><span>'+safe(option)+'</span></button>').join('')+'</div>')+
+ (answered?'<div class="rule-feedback '+(answer.correct?'right':'wrong')+'"><strong>'+(answer.correct?'Верно!':'Правильный ответ: '+safe(item.expression))+'</strong><p>'+safe(item.sentence)+'</p>'+(item.translation?'<p>'+safe(item.translation)+'</p>':'')+'</div><button class="primary" data-action="word-ex-next">'+(ex.index===ex.items.length-1?'Завершить занятие':'Следующее предложение →')+'</button>':'')+
+ '</section>';
+}
+function wordAddEditor(){
+ const d=wordAddDraft;
+ return '<div class="overlay"><section class="popup edit-popup" role="dialog" aria-modal="true" aria-label="Добавить слово из упражнения"><div class="row"><h2>Добавить в словарь</h2><button class="edit-close" data-action="word-add-cancel" aria-label="Закрыть">×</button></div>'+
+ '<form id="word-add-editor"><div class="field"><label>Английское слово *</label><input name="en" required value="'+safe(d.en)+'"></div>'+
+ '<div class="field"><label>Русский смысл *</label><textarea name="ru" required>'+safe(d.ru||'')+'</textarea></div>'+
+ '<div class="field"><label>Английский пример</label><textarea name="example">'+safe(d.example||'')+'</textarea></div>'+
+ '<div class="field"><label>Перевод примера</label><textarea name="exampleRu">'+safe(d.exampleRu||'')+'</textarea></div>'+
+ '<div class="field"><label>Пояснение</label><textarea name="note">'+safe(d.note||'')+'</textarea></div>'+
+ '<div class="edit-actions"><button class="primary" type="submit">Сохранить слово</button><button class="secondary" type="button" data-action="word-add-cancel">Отмена</button></div></form></section></div>';
+}
+function localWordTranslation(word){
+ const lower=norm(word);
+ const direct=activeCards().find(c=>norm(c.en)===lower);
+ if(direct)return {ru:direct.ru,note:direct.note||'Уже есть в твоём словаре'};
+ const derived=activeCards().find(c=>[norm(c.en)+'s',norm(c.en)+'ed',norm(c.en).replace(/e$/,'')+'ing'].includes(lower));
+ if(derived)return {ru:derived.ru,note:'Похоже на форму слова: '+derived.en};
+ return null;
+}
+const wordLookupCache=new Map();
+async function lookupWord(word){
+ if(!wordExercise?.items?.[wordExercise.index])return;
+ const local=localWordTranslation(word),cached=wordLookupCache.get(norm(word));
+ wordPopup={word,loading:!(local||cached),...(local||cached||{})};render();
+ if(local||cached)return;
+ try{
+  const response=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(word)+'&langpair=en%7Cru');
+  if(!response.ok)throw Error('Translation unavailable');
+  const data=await response.json();
+  const translated=String(data?.responseData?.translatedText||'').trim();
+  const result=translated&&norm(translated)!==norm(word)?
+   {ru:translated,note:'Автоматический перевод: уточни значение по контексту перед сохранением'}:
+   {ru:'',note:'Точного перевода нет — при необходимости заполни вручную'};
+  wordLookupCache.set(norm(word),result);
+  if(wordPopup?.word===word){wordPopup={word,loading:false,...result};render()}
+ }catch{
+  if(wordPopup?.word===word){wordPopup={word,loading:false,ru:'',note:'Переводчик сейчас недоступен. Можно добавить слово вручную.'};render()}
+ }
+}
+
 function addPage(){return heading('НОВЫЕ СЛОВА','Пополнить коллекцию','Добавляй одну карточку или целые списки. В ближайшие занятия попадут все новые слова.')+'<section class="panel" style="margin-top:28px"><form id="single"><div class="grid"><div class="field"><label>Русский смысл *</label><input name="ru" required placeholder="Разобраться"></div><div class="field"><label>Английское выражение *</label><input name="en" required placeholder="figure out"></div><div class="field"><label>Пример на английском</label><input name="example" placeholder="I will figure it out."></div><div class="field"><label>Перевод примера</label><input name="exampleRu"></div></div><div class="field"><label>Пояснение / контекст</label><textarea name="note"></textarea></div><button class="primary">＋ Сохранить карточку</button></form></section><section class="panel" style="margin-top:20px"><h2>Добавить списком</h2><p class="muted">Одна карточка в строке, поля разделяются вертикальной чертой |. Порядок: русский смысл | английское слово | пример EN | перевод примера | пояснение.</p><form id="bulk"><div class="field"><textarea name="bulk" required placeholder="Разобраться | figure out | I will figure it out.&#10;Тем не менее | nevertheless"></textarea></div><button class="secondary">＋ Добавить весь список</button></form></section>'}
 function account(){
   if(cloud.signedIn){
