@@ -1,4 +1,4 @@
-import { createCloudBridge } from './cloud-sync.js?v=20261030-18';
+import { createCloudBridge } from './cloud-sync.js?v=20261030-20';
 import { JOKES } from './jokes.js?v=20261028-11';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
 import { createWordExercise } from './word-exercises.js?v=20261030-19';
@@ -432,6 +432,7 @@ function wordSourceLabel(source){
  return {new:'Новые слова',all:'Случайные слова',hard:'Сложные слова',due:'Пора повторить',shelf:'Слова из полки'}[source]||'Все слова';
 }
 function startWordExercise(){
+ wordAudioToken++;if(typeof window.speechSynthesis!=='undefined')window.speechSynthesis.cancel();
  const pool=wordSourceCards(wordExerciseSource,wordExerciseShelf);
  if(!pool.length){notify('В этой группе пока нет слов.');return}
  const result=createWordExercise(activeCards(),pool);
@@ -470,8 +471,8 @@ function wordExercisePage(){
  return heading('УПРАЖНЕНИЯ СО СЛОВАМИ',wordSourceLabel(wordExerciseSource),'Вспомни ответ самостоятельно, а затем выбери вариант без набора текста.')+
  '<div class="rule-back"><button class="link" data-action="word-ex-back">← К выбору слов</button></div>'+
  '<section class="panel wordex-quiz"><div class="row"><span class="eyebrow">ПРЕДЛОЖЕНИЕ '+(ex.index+1)+' ИЗ '+ex.items.length+'</span><button class="wordex-audio" data-action="word-ex-speak" aria-label="Прослушать предложение">♫ Слушать</button></div>'+
- (wordPopup?'<div class="wordex-popover" role="status"><div class="row"><strong>'+safe(wordPopup.word)+'</strong><button class="link" data-action="word-lookup-close" aria-label="Закрыть перевод">×</button></div><p class="wordex-meaning">'+safe(wordPopup.loading?'Ищу перевод…':wordPopup.ru||'Перевод не найден')+'</p>'+
- (wordPopup.note?'<p class="muted">'+safe(wordPopup.note)+'</p>':'')+
+ (wordPopup?'<div class="wordex-popover" role="status"><div class="row"><strong>'+safe(wordPopup.word)+'</strong><button class="link" data-action="word-lookup-close" aria-label="Закрыть перевод">×</button></div><p class="wordex-meaning">'+safe(wordPopup.loading?'ИИ подбирает перевод в контексте…':wordPopup.ru||(wordPopup.error?'Точного перевода сейчас нет':'Перевод не найден'))+'</p>'+
+ (wordPopup.note?'<p class="muted">'+safe(wordPopup.note)+'</p>':'')+(wordPopup.error?'<p class="wordex-ai-error">'+safe(wordPopup.error)+'</p>':'')+
  '<button class="secondary" data-action="word-add" '+(wordPopup.loading?'disabled':'')+'>＋ Добавить в словарь</button></div>':'')+
  '<div class="wordex-sentence">'+wordClickable(item.before)+'<span class="wordex-gap">'+(answered?wordClickable(item.expression):'________')+'</span>'+wordClickable(item.after)+'</div>'+
  '<p class="wordex-translate-hint">Коснись любого английского слова, чтобы посмотреть перевод.</p>'+
@@ -491,32 +492,36 @@ function wordAddEditor(){
  '<div class="field"><label>Пояснение</label><textarea name="note">'+safe(d.note||'')+'</textarea></div>'+
  '<div class="edit-actions"><button class="primary" type="submit">Сохранить слово</button><button class="secondary" type="button" data-action="word-add-cancel">Отмена</button></div></form></section></div>';
 }
+
 function localWordTranslation(word){
- const lower=norm(word);
- const direct=activeCards().find(c=>norm(c.en)===lower);
- if(direct)return {ru:direct.ru,note:direct.note||'Уже есть в твоём словаре'};
- const derived=activeCards().find(c=>[norm(c.en)+'s',norm(c.en)+'ed',norm(c.en).replace(/e$/,'')+'ing'].includes(lower));
- if(derived)return {ru:derived.ru,note:'Похоже на форму слова: '+derived.en};
- return null;
+ const card=activeCards().find(c=>norm(c.en)===norm(word));
+ return card?{ru:card.ru,note:'Словарное значение. Контекстный перевод пока недоступен.'}:null;
 }
 const wordLookupCache=new Map();
 async function lookupWord(word){
- if(!wordExercise?.items?.[wordExercise.index])return;
- const local=localWordTranslation(word),cached=wordLookupCache.get(norm(word));
- wordPopup={word,loading:!(local||cached),...(local||cached||{})};render();
- if(local||cached)return;
- try{
-  const response=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(word)+'&langpair=en%7Cru');
-  if(!response.ok)throw Error('Translation unavailable');
-  const data=await response.json();
-  const translated=String(data?.responseData?.translatedText||'').trim();
-  const result=translated&&norm(translated)!==norm(word)?
-   {ru:translated,note:'Автоматический перевод: уточни значение по контексту перед сохранением'}:
-   {ru:'',note:'Точного перевода нет — при необходимости заполни вручную'};
-  wordLookupCache.set(norm(word),result);
-  if(wordPopup?.word===word){wordPopup={word,loading:false,...result};render()}
- }catch{
-  if(wordPopup?.word===word){wordPopup={word,loading:false,ru:'',note:'Переводчик сейчас недоступен. Можно добавить слово вручную.'};render()}
+ const item=wordExercise?.items?.[wordExercise.index];
+ if(!item||!word)return;
+ const answered=Boolean(wordExercise.answers[wordExercise.index]);
+ const context=answered?item.sentence:item.before+' ____ '+item.after;
+ const key=norm(word)+'|'+context;
+ const requestKey=item.id+'|'+key;
+ const cached=wordLookupCache.get(key);
+ wordPopup={word,requestKey,loading:!cached,ru:cached?.ru||'',note:cached?.note||''};
+ render();
+ if(cached)return;
+ try {
+  const result=await cloud.translateWordInContext(word,context);
+  wordLookupCache.set(key,result);
+  if(wordPopup?.requestKey===requestKey&&wordExercise?.items?.[wordExercise.index]?.id===item.id){
+   wordPopup={word,requestKey,loading:false,...result};
+   render();
+  }
+ }catch(err){
+  const local=localWordTranslation(word);
+  if(wordPopup?.requestKey===requestKey&&wordExercise?.items?.[wordExercise.index]?.id===item.id){
+   wordPopup={word,requestKey,loading:false,ru:local?.ru||'',note:local?.note||'',error:String(err?.message||'ИИ-перевод недоступен')};
+   render();
+  }
  }
 }
 
@@ -710,7 +715,7 @@ document.addEventListener('click',e=>{
  else if(a==='due')begin('due');
  else if(a==='hard')begin('hard');
  else if(a==='word-ex-start')startWordExercise();
- else if(a==='word-ex-back'){wordExercise=null;wordPopup=null;page='word-exercises';render()}
+ else if(a==='word-ex-back'){wordAudioToken++;if(typeof window.speechSynthesis!=='undefined')window.speechSynthesis.cancel();wordExercise=null;wordPopup=null;page='word-exercises';render()}
  else if(a==='word-ex-restart')startWordExercise();
  else if(a==='word-ex-reveal'){if(wordExercise&&!wordExercise.answers[wordExercise.index]){wordExercise.reveal=true;render()}}
  else if(a==='word-ex-answer'){
@@ -721,6 +726,8 @@ document.addEventListener('click',e=>{
    wordPopup=null;render();
  }
  else if(a==='word-ex-next'){
+   wordAudioToken++;
+   if(typeof window.speechSynthesis!=='undefined')window.speechSynthesis.cancel();
    if(!wordExercise||!wordExercise.answers[wordExercise.index])return;
    wordExercise.index++;wordExercise.reveal=false;wordPopup=null;
    if(wordExercise.index===wordExercise.items.length){
