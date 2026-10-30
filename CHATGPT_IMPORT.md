@@ -195,3 +195,26 @@ Each grammar rule has the following payload:
 **Important:** The site's "Составить упражнения" button currently starts a shuffled 5–7-question set drawn from the **saved `payload.questions` bank**. The site does NOT yet make paid, live LLM calls. To add more fresh questions now, the tutor chat can generate and save an additional reviewed batch at the user's explicit request; it is not yet automatic through the site. Do not represent this as live AI generation.
 
 As for cards, after executing an authorized SQL write, re-query that exact record and report its title and question count. If the database rejects a write, report its exact error.
+
+## Context exercises for existing vocabulary cards
+
+The site has a separate **«Слова → Упражнения со словами»** mode: ten contextual fill-in exercises, with sources **new / all random / difficult / due / selected shelf**. No paid live AI API is currently connected to the site; it uses prepared contexts plus existing card examples.
+
+If the user **explicitly requests** new AI-prepared contextual sentences for cards, a ChatGPT tutor with Supabase access can add reviewed examples to each card's JSON payload under an optional `exerciseExamples` array:
+
+```json
+"exerciseExamples": [
+  {
+    "en": "It was generous of her to help a stranger.",
+    "ru": "С её стороны было щедро помочь незнакомцу."
+  },
+  {
+    "en": "That was a generous offer.",
+    "ru": "Это было щедрое предложение."
+  }
+]
+```
+
+The exact expression recorded in `payload.en` must appear **literally and as a complete word/phrase** in every `exerciseExamples[].en`. For phrasal verbs and collocations, keep the expression contiguous (e.g. `get along with`); do not substitute an inflected form or separate its components, or the current site may skip that sentence. Validate natural grammar, truth of the Russian translation, and that removing the expression leaves a useful context. Offer several distinct realistic scenarios rather than repeating the same template. Do not generate obvious distractors — the site builds its own answer choices from vocabulary.
+
+**Safety:** Fetch the current card row under the verified website `user_id`, merge the new examples into the existing JSON object and update only `payload.exerciseExamples` and `payload.updatedAt` plus the table's `updated_at`. Preserve `history`, `fsrs`, `difficult`, `id`, original `example`, and **every other existing field**. Deduplicate by English sentence, avoid overwriting concurrently updated card data, and verify the updated row. Do not create these examples until the user specifically asks. This is a bridge for tutor-assisted generation, not a claim that the website itself calls AI.
