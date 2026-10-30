@@ -155,11 +155,11 @@ A shelf can be deleted in the UI using a soft-delete marker `payload.deletedAt` 
 
 When the user asks "Добавь это правило в Everyword", save a clear, accurate explanation to **public.everyword_rules** in the same Supabase project. Do NOT add grammar automatically during an ordinary discussion.
 
-Schema: \`public.everyword_rules(id uuid, user_id uuid, payload jsonb, updated_at timestamptz)\`; RLS is enabled and each user owns only their records. The admin \`execute_sql\` connection has \`auth.uid() = NULL\`: resolve the actual authenticated website account from \`auth.users\`, as for vocabulary cards, and use the existing \`auth.users.id\`. Do not invent the user UUID.
+Schema: `public.everyword_rules(id uuid, user_id uuid, payload jsonb, updated_at timestamptz)`; RLS is enabled and each user owns only their records. The admin `execute_sql` connection has `auth.uid() = NULL`: resolve the actual authenticated website account from `auth.users`, as for vocabulary cards, and use the existing `auth.users.id`. Do not invent the user UUID.
 
 Each grammar rule has the following payload:
 
-\`\`\`json
+```json
 {
   "id": "the same UUID as the database row id",
   "title": "Past Simple",
@@ -186,12 +186,12 @@ Each grammar rule has the following payload:
   "createdAt": "ISO 8601 UTC timestamp",
   "updatedAt": "ISO 8601 UTC timestamp"
 }
-\`\`\`
+```
 
 **Question rules:** Create **5–7 well-checked multiple-choice questions** per grammar rule when the user requests exercises or when explicitly asking to add the rule *with exercises*. Prefer 4 plausible, grammatically consistent options; ensure exactly one correct answer in the full context. Distractors should reflect actual confusions in the **same tense/time frame** where sensible; avoid a giveaway such as three present-tense choices and one past-tense answer when past tense is obvious. Every option should have a concise reason, especially wrong choices. If more than one option is defensible, **rewrite the question before storing it**. Provide a range of contexts and avoid repetitive templates. All grammar explanations are in natural Russian; English examples remain in English. Do not insert unreviewed/ambiguous tasks.
 
-**Operations:** Check for a duplicate rule title under the verified user_id. Create a single fresh \`gen_random_uuid()\` for a new rule, mirror it in \`payload.id\`, and construct JSON through \`jsonb_build_object\` or safely escaped JSON. To update an existing rule, fetch its current payload, preserve \`id\`, \`createdAt\` and any \`quizHistory\`, update the relevant fields and \`updatedAt\`. Respect \`deletedAt\` tombstones and user ownership. Never overwrite the user's review history or vocabulary cards.
+**Operations:** Check for a duplicate rule title under the verified user_id. Create a single fresh `gen_random_uuid()` for a new rule, mirror it in `payload.id`, and construct JSON through `jsonb_build_object` or safely escaped JSON. To update an existing rule, fetch its current payload, preserve `id`, `createdAt` and any `quizHistory`, update the relevant fields and `updatedAt`. Respect `deletedAt` tombstones and user ownership. Never overwrite the user's review history or vocabulary cards.
 
-**Important:** The site's "Составить упражнения" button currently starts a shuffled 5–7-question set drawn from the **saved \`payload.questions\` bank**. The site does NOT yet make paid, live LLM calls. To add more fresh questions now, the tutor chat can generate and save an additional reviewed batch at the user's explicit request; it is not yet automatic through the site. Do not represent this as live AI generation.
+**Important:** The site's "Составить упражнения" button currently starts a shuffled 5–7-question set drawn from the **saved `payload.questions` bank**. The site does NOT yet make paid, live LLM calls. To add more fresh questions now, the tutor chat can generate and save an additional reviewed batch at the user's explicit request; it is not yet automatic through the site. Do not represent this as live AI generation.
 
 As for cards, after executing an authorized SQL write, re-query that exact record and report its title and question count. If the database rejects a write, report its exact error.
