@@ -12,9 +12,9 @@ const validCard = c => c && typeof c.id === 'string' &&
   typeof c.ru === 'string' && typeof c.en === 'string' &&
   Array.isArray(c.history);
 
-export function createCloudBridge({ getCards, mergeCards, getPractices, mergePractices, getShelves, mergeShelves, onStatus, onIdentity }) {
+export function createCloudBridge({ getCards, mergeCards, getPractices, mergePractices, getShelves, mergeShelves, getRules, mergeRules, onStatus, onIdentity }) {
   let client = null, user = null, ready = false, syncing = false, pending = false;
-  let snapshots = new Map(), practiceSnapshots = new Set(), shelfSnapshots = new Map(), saveTimer = null, status = configured ? 'connecting' : 'unconfigured';
+  let snapshots = new Map(), practiceSnapshots = new Set(), shelfSnapshots = new Map(), ruleSnapshots = new Map(), saveTimer = null, status = configured ? 'connecting' : 'unconfigured';
   const setStatus = s => { status = s; onStatus?.(s, user); };
   const api = {
     get configured() { return configured; },
@@ -99,6 +99,36 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
       batch.forEach(s=>shelfSnapshots.set(s.id,cardJSON(s)));
     }
   }
+  function mergeRuleSets(local,remote){
+    const all=new Map(remote.map(r=>[r.id,r]));
+    for(const r of local){
+      const previous=all.get(r.id);
+      if(!previous||String(r.updatedAt||'')>String(previous.updatedAt||''))all.set(r.id,r);
+    }
+    return [...all.values()];
+  }
+  async function listRules(accountId){
+    const items=[];
+    for(let from=0;;from+=500){
+      const {data,error}=await client.from('everyword_rules')
+        .select('id,payload,updated_at').eq('user_id',accountId)
+        .order('updated_at',{ascending:true}).range(from,from+499);
+      if(error)throw error;
+      items.push(...(data||[]));
+      if(!data||data.length<500)break;
+    }
+    return items.map(row=>row.payload).filter(rule=>rule&&typeof rule.id==='string'&&typeof rule.title==='string');
+  }
+  async function uploadRules(rules,accountId){
+    for(let i=0;i<rules.length;i+=100){
+      if(user?.id!==accountId)return;
+      const batch=rules.slice(i,i+100);
+      const rows=batch.map(rule=>({id:rule.id,user_id:accountId,payload:rule,updated_at:new Date().toISOString()}));
+      const {error}=await client.from('everyword_rules').upsert(rows,{onConflict:'id'});
+      if(error)throw error;
+      batch.forEach(rule=>ruleSnapshots.set(rule.id,cardJSON(rule)));
+    }
+  }
   async function upload(cards, accountId) {
     if (!cards.length) return;
     for (let i = 0; i < cards.length; i += 100) {
@@ -119,11 +149,12 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
     syncing = true;
     setStatus('syncing');
     try {
-      const [remote,remotePractices,remoteShelves] = await Promise.all([listRemote(accountId),listPractices(accountId),listShelves(accountId)]);
+      const [remote,remotePractices,remoteShelves,remoteRules] = await Promise.all([listRemote(accountId),listPractices(accountId),listShelves(accountId),listRules(accountId)]);
       if (user?.id !== accountId) return;
       const local = getCards().filter(validCard);
       const localPractices=(getPractices?.()||[]).filter(p=>p&&p.id&&p.day&&p.kind&&p.at);
       const localShelves=(getShelves?.()||[]).filter(s=>s?.id&&s?.title&&Array.isArray(s.cardIds));
+      const localRules=(getRules?.()||[]).filter(r=>r?.id&&r?.title);
       const remoteMap = new Map(remote.map(x => [x.id, x]));
       const combined = new Map();
       const toUpload = [];
@@ -145,12 +176,18 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
       const mergedShelves=mergeShelfSets(localShelves,remoteShelves);
       mergeShelves?.(mergedShelves);
       remoteShelves.forEach(s=>shelfSnapshots.set(s.id,cardJSON(s)));
+      const mergedRules=mergeRuleSets(localRules,remoteRules);
+      mergeRules?.(mergedRules);
+      remoteRules.forEach(r=>ruleSnapshots.set(r.id,cardJSON(r)));
+      const remoteRuleMap=new Map(remoteRules.map(r=>[r.id,r]));
+      const ruleUpdates=mergedRules.filter(r=>!remoteRuleMap.has(r.id)||String(r.updatedAt)>String(remoteRuleMap.get(r.id).updatedAt));
       const remoteShelfMap=new Map(remoteShelves.map(s=>[s.id,s]));
       const shelfUpdates=mergedShelves.filter(s=>!remoteShelfMap.has(s.id)||shelfStamp(s)>shelfStamp(remoteShelfMap.get(s.id)));
       remotePractices.forEach(p=>practiceSnapshots.add(p.id));
       await upload(toUpload, accountId);
       await uploadPractices(localPractices.filter(p=>!practiceSnapshots.has(p.id)),accountId);
       await uploadShelves(shelfUpdates,accountId);
+      await uploadRules(ruleUpdates,accountId);
       if (user?.id !== accountId) return;
       ready = true;
       setStatus('connected');
@@ -168,9 +205,11 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
       const changed = getCards().filter(validCard).filter(c => snapshots.get(c.id) !== cardJSON(c));
       const practiceChanges=(getPractices?.()||[]).filter(p=>p?.id&&!practiceSnapshots.has(p.id));
       const shelfChanges=(getShelves?.()||[]).filter(s=>s?.id&&shelfSnapshots.get(s.id)!==cardJSON(s));
+      const ruleChanges=(getRules?.()||[]).filter(r=>r?.id&&ruleSnapshots.get(r.id)!==cardJSON(r));
       await upload(changed, accountId);
       await uploadPractices(practiceChanges,accountId);
       await uploadShelves(shelfChanges,accountId);
+      await uploadRules(ruleChanges,accountId);
       if (user?.id !== accountId) return;
       setStatus('connected');
     } catch (e) {
@@ -188,7 +227,7 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
     const accountId = user.id;
     syncing = true;
     try {
-      const [remote,remotePractices,remoteShelves] = await Promise.all([listRemote(accountId),listPractices(accountId),listShelves(accountId)]);
+      const [remote,remotePractices,remoteShelves,remoteRules] = await Promise.all([listRemote(accountId),listPractices(accountId),listShelves(accountId),listRules(accountId)]);
       if (user?.id !== accountId) return;
       const current = new Map(getCards().map(c => [c.id, c]));
       let changed = false;
@@ -213,6 +252,10 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
       const mergedShelves=mergeShelfSets(beforeShelves,remoteShelves);
       if(JSON.stringify(mergedShelves)!==JSON.stringify(beforeShelves))mergeShelves?.(mergedShelves);
       remoteShelves.forEach(s=>{if(!beforeShelves.some(l=>l.id===s.id&&shelfStamp(l)>shelfStamp(s)))shelfSnapshots.set(s.id,cardJSON(s))});
+      const existingRules=getRules?.()||[];
+      const combinedRules=mergeRuleSets(existingRules,remoteRules);
+      if(JSON.stringify(combinedRules)!==JSON.stringify(existingRules))mergeRules?.(combinedRules);
+      remoteRules.forEach(r=>{if(!existingRules.some(l=>l.id===r.id&&String(l.updatedAt)>String(r.updatedAt)))ruleSnapshots.set(r.id,cardJSON(r))});
       setStatus('connected');
     } catch (e) {
       console.error('Everyword cloud refresh failed', e);
@@ -241,6 +284,7 @@ export function createCloudBridge({ getCards, mergeCards, getPractices, mergePra
     snapshots.clear();
     practiceSnapshots.clear();
     shelfSnapshots.clear();
+    ruleSnapshots.clear();
     clearTimeout(saveTimer);
     onIdentity?.(user);
     return true;
