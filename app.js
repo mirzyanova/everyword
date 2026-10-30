@@ -1,9 +1,9 @@
-import { createCloudBridge } from './cloud-sync.js?v=20261028-13';
+import { createCloudBridge } from './cloud-sync.js?v=20261030-18';
 import { JOKES } from './jokes.js?v=20261028-11';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
-let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
+let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,ruleOpenId=null,ruleEditId=null,ruleDeleteConfirm=false,grammarQuiz=null,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
 const now=()=>new Date(),id=()=>crypto.randomUUID(),norm=s=>String(s||'').trim().toLocaleLowerCase(),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(x?.cards))return x}catch{}return {cards:[]}}
 function loadGuest(){
@@ -22,21 +22,23 @@ function mergeCardSets(left,right){
   }
   const shelves=new Map((left?.shelves||[]).filter(s=>s?.id).map(s=>[s.id,s]));
   for(const shelf of right?.shelves||[]){const prev=shelves.get(shelf.id);if(!prev||String(shelf.updatedAt)>String(prev.updatedAt))shelves.set(shelf.id,shelf)}
-  return {cards:[...merged.values()],practices:[...new Map([...(left?.practices||[]),...(right?.practices||[])].map(p=>[p.id,p])).values()],shelves:[...shelves.values()]};
+  const rules=new Map((left?.rules||[]).filter(r=>r?.id).map(r=>[r.id,r]));
+  for(const rule of right?.rules||[]){const prev=rules.get(rule.id);if(!prev||String(rule.updatedAt)>String(prev.updatedAt))rules.set(rule.id,rule)}
+  return {cards:[...merged.values()],practices:[...new Map([...(left?.practices||[]),...(right?.practices||[])].map(p=>[p.id,p])).values()],shelves:[...shelves.values()],rules:[...rules.values()]};
 }
 function switchAccount(user){
   const uid=user?.id||null;
   if(uid===accountId)return;
   const previous=accountId;
   if(!previous){try{localStorage.setItem(GUEST_KEY,JSON.stringify(state))}catch(e){console.error(e)}}
-  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;undo=null;modal=null;page='home';search='';
+  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;ruleOpenId=null;ruleEditId=null;ruleDeleteConfirm=false;grammarQuiz=null;undo=null;modal=null;page='home';search='';
   if(!uid){state=loadGuest();guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1';render();return}
   let saved=loadAccount(uid);
   const owner=localStorage.getItem(LEGACY_OWNER);
   if(owner===uid)saved=mergeCardSets(saved,load());
   if(!previous){
     const guest=loadGuest();
-    if(guest.cards.length||(guest.shelves||[]).length){
+    if(guest.cards.length||(guest.shelves||[]).length||(guest.rules||[]).length){
       saved=mergeCardSets(saved,guest);
       try{localStorage.setItem(GUEST_KEY,JSON.stringify({cards:[]}))}catch(e){console.error(e)}
     }
@@ -65,6 +67,8 @@ function activeCards(){return state.cards.filter(c=>!c.deletedAt)}
 function completedPractices(){return Array.isArray(state.practices)?state.practices:[]}
 function shelves(){return Array.isArray(state.shelves)?state.shelves:[]}
 function activeShelves(){return shelves().filter(s=>!s.deletedAt)}
+function rules(){return Array.isArray(state.rules)?state.rules:[]}
+function activeRules(){return rules().filter(r=>!r.deletedAt)}
 function streakDays(){
   const unique=new Set(completedPractices().map(p=>p.day));
   const cursor=new Date();cursor.setHours(12,0,0,0);
@@ -122,7 +126,7 @@ function begin(kind='new',shelfId=null){
 
 const NAV_MENU=[
  ['home','Главная'],['study','Учить слова'],['library','Мои слова'],
- ['add','Добавить'],['shelves','Полка'],['settings','Настройки']
+ ['add','Добавить'],['shelves','Полка'],['rules','Правила'],['settings','Настройки']
 ];
 const NAV_ICONS={
  home:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 21v-7h6v7"/>',
@@ -130,6 +134,7 @@ const NAV_ICONS={
  library:'<rect x="4" y="4" width="4" height="16" rx="1"/><rect x="10" y="4" width="4" height="16" rx="1"/><path d="m17 6 3 13"/><path d="m16 6 3-1 3 13-3 1"/>',
  add:'<path d="M12 5v14"/><path d="M5 12h14"/>',
  shelves:'<rect x="3" y="4" width="7" height="7" rx="1.2"/><rect x="14" y="4" width="7" height="7" rx="1.2"/><rect x="3" y="15" width="7" height="6" rx="1.2"/><rect x="14" y="15" width="7" height="6" rx="1.2"/>',
+ rules:'<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
  settings:'<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12"/>',
  account:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="9" r="3"/><path d="M5.5 19a7 7 0 0 1 13 0"/>'
 };
@@ -146,7 +151,7 @@ function sidebar(){
  '<span class="account-hint">'+(cloud.signedIn?'Вход выполнен':'Войти и сохранить прогресс')+'</span></div></nav></aside>';
 }
 function mobile(){
- const menus=[['home','Главная'],['study','Учить'],['library','Слова'],['add','Добавить'],['shelves','Полка'],['account','Аккаунт']];
+ const menus=[['home','Главная'],['library','Слова'],['add','Добавить'],['rules','Правила'],['shelves','Полка'],['account','Аккаунт']];
  return '<nav class="mobile">'+menus.map(([kind,label])=>navButton(kind,label)).join('')+'</nav>';
 }
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
@@ -315,6 +320,8 @@ const cloud=createCloudBridge({
   getCards:()=>state.cards,
   getPractices:()=>completedPractices(),
   getShelves:()=>shelves(),
+  getRules:()=>rules(),
+  mergeRules:incoming=>{state.rules=incoming;save();render()},
   mergeShelves:incoming=>{state.shelves=incoming;save();render()},
   mergePractices:practices=>{state.practices=practices;save();render()},
   mergeCards:cards=>{state.cards=cards;try{if(accountId)localStorage.setItem(USER_PREFIX+accountId,JSON.stringify(state))}catch(e){console.error(e)}render()},
@@ -322,7 +329,7 @@ const cloud=createCloudBridge({
   onStatus:()=>{if(page==='account'||page==='settings')render()}
 });
 function render(){
- const content=({home,study,library,add:addPage,shelves:shelfPage,settings,account}[page]||home)();
+ const content=({home,study,library,add:addPage,shelves:shelfPage,rules:rulePage,settings,account}[page]||home)();
  let popup='';
  if(editId)popup=cardEditor();
  else if(shelfDraft)popup=shelfEditor();
