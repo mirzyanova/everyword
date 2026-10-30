@@ -1,9 +1,10 @@
 import { createCloudBridge } from './cloud-sync.js?v=20261030-18';
 import { JOKES } from './jokes.js?v=20261028-11';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
+import { createWordExercise } from './word-exercises.js?v=20261030-19';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
-let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,ruleOpenId=null,ruleEditId=null,ruleDeleteConfirm=false,grammarQuiz=null,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
+let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,ruleOpenId=null,ruleEditId=null,ruleDeleteConfirm=false,grammarQuiz=null,navExpanded=null,mobileNavExpanded=null,wordExercise=null,wordExerciseSource='new',wordExerciseShelf='',wordPopup=null,wordAddDraft=null,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
 const now=()=>new Date(),id=()=>crypto.randomUUID(),norm=s=>String(s||'').trim().toLocaleLowerCase(),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(x?.cards))return x}catch{}return {cards:[]}}
 function loadGuest(){
@@ -31,7 +32,7 @@ function switchAccount(user){
   if(uid===accountId)return;
   const previous=accountId;
   if(!previous){try{localStorage.setItem(GUEST_KEY,JSON.stringify(state))}catch(e){console.error(e)}}
-  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;ruleOpenId=null;ruleEditId=null;ruleDeleteConfirm=false;grammarQuiz=null;undo=null;modal=null;page='home';search='';
+  accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;ruleOpenId=null;ruleEditId=null;ruleDeleteConfirm=false;grammarQuiz=null;wordExercise=null;wordPopup=null;wordAddDraft=null;navExpanded=null;mobileNavExpanded=null;undo=null;modal=null;page='home';search='';
   if(!uid){state=loadGuest();guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1';render();return}
   let saved=loadAccount(uid);
   const owner=localStorage.getItem(LEGACY_OWNER);
@@ -124,10 +125,6 @@ function begin(kind='new',shelfId=null){
  practice=kind!=='new';sessionRated=0;undo=null;shown=false;flipped=false;page='study';render();
 }
 
-const NAV_MENU=[
- ['home','Главная'],['study','Учить слова'],['library','Мои слова'],
- ['add','Добавить'],['shelves','Полка'],['rules','Правила'],['settings','Настройки']
-];
 const NAV_ICONS={
  home:'<path d="m3 10 9-7 9 7"/><path d="M5 9v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9"/><path d="M9 21v-7h6v7"/>',
  study:'<path d="M12 7v14"/><path d="M3 18V5a2 2 0 0 1 2-2h4a3 3 0 0 1 3 3v15"/><path d="M21 18V5a2 2 0 0 0-2-2h-4a3 3 0 0 0-3 3"/><path d="M3 18a3 3 0 0 1 3-3h3a3 3 0 0 1 3 3"/><path d="M21 18a3 3 0 0 0-3-3h-3a3 3 0 0 0-3 3"/>',
@@ -138,21 +135,46 @@ const NAV_ICONS={
  settings:'<circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.93 4.93l2.12 2.12M16.95 16.95l2.12 2.12M19.07 4.93l-2.12 2.12M7.05 16.95l-2.12 2.12"/>',
  account:'<circle cx="12" cy="12" r="10"/><circle cx="12" cy="9" r="3"/><path d="M5.5 19a7 7 0 0 1 13 0"/>'
 };
+const WORDS_SUBMENU=[
+ ['library','Мои слова'],['add','Добавить слова'],['study','Учить слова'],
+ ['word-exercises','Упражнения со словами'],['shelves','Полки']
+];
+const RULES_SUBMENU=[['rules','Мои правила'],['rule-exercises','Упражнения по правилам']];
 function navIcon(kind){
  return '<svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+NAV_ICONS[kind]+'</svg>';
 }
-function navButton(kind,label){
- return '<button type="button" data-page="'+kind+'" class="'+(page===kind?'active':'')+'">'+navIcon(kind)+'<span class="nav-label">'+label+'</span></button>';
+function navGroupForPage(which){
+ if(['library','add','study','word-exercises','shelves'].includes(which))return 'words';
+ if(['rules','rule-exercises'].includes(which))return 'rules';
+ return null;
+}
+function subNavItems(group){return group==='words'?WORDS_SUBMENU:group==='rules'?RULES_SUBMENU:[]}
+function rootButton(kind,label,group=false){
+ const active=group?(navGroupForPage(page)===kind):(page===kind||(kind==='settings'&&page==='account'));
+ return '<button type="button" '+(group?'data-nav-group="'+kind+'"':'data-page="'+kind+'"')+
+ ' class="nav-root'+(active?' active':'')+'" aria-label="'+label+'"'+(group?' aria-expanded="'+String(navExpanded===kind)+'"':'')+'>'+
+ navIcon(kind==='words'?'library':kind==='rules'?'rules':kind)+
+ '<span class="nav-label">'+label+'</span>'+
+ (group?'<span class="nav-chevron" aria-hidden="true">'+(navExpanded===kind?'⌃':'⌄')+'</span>':'')+'</button>';
+}
+function subNav(group){
+ return '<div class="nav-subitems">'+subNavItems(group).map(([dest,label])=>
+ '<button type="button" class="nav-subitem'+(page===dest?' active':'')+'" data-page="'+dest+'">'+label+'</button>'
+ ).join('')+'</div>';
 }
 function sidebar(){
- return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav">'+
- NAV_MENU.map(([kind,label])=>navButton(kind,label)).join('')+
- '<div class="nav-account">'+navButton('account','Аккаунт')+
- '<span class="account-hint">'+(cloud.signedIn?'Вход выполнен':'Войти и сохранить прогресс')+'</span></div></nav></aside>';
+ return '<aside class="side"><div class="logo">everyword<small>MY ENGLISH SPACE</small></div><nav class="nav nav-groups">'+
+ rootButton('home','Главное')+
+ rootButton('words','Слова',true)+(navExpanded==='words'?subNav('words'):'')+
+ rootButton('rules','Правила',true)+(navExpanded==='rules'?subNav('rules'):'')+
+ rootButton('settings','Настройки')+'</nav></aside>';
 }
 function mobile(){
- const menus=[['home','Главная'],['library','Слова'],['add','Добавить'],['rules','Правила'],['shelves','Полка'],['account','Аккаунт']];
- return '<nav class="mobile">'+menus.map(([kind,label])=>navButton(kind,label)).join('')+'</nav>';
+ const roots=[['home','Главное',false],['words','Слова',true],['rules','Правила',true],['settings','Настройки',false]];
+ const items=mobileNavExpanded&&['words','rules'].includes(mobileNavExpanded)?
+ '<div class="mobile-subnav" role="menu">'+subNavItems(mobileNavExpanded).map(([dest,label])=>
+ '<button type="button" role="menuitem" class="'+(page===dest?'active':'')+'" data-page="'+dest+'">'+label+'</button>').join('')+'</div>':'';
+ return items+'<nav class="mobile mobile-four" aria-label="Основные разделы">'+roots.map(([dest,label,group])=>rootButton(dest,label,group)).join('')+'</nav>';
 }
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
 const JOKE_ROTATION_KEY='everyword-jokes-rotation-v1';
@@ -422,10 +444,11 @@ const cloud=createCloudBridge({
   onStatus:()=>{if(page==='account'||page==='settings')render()}
 });
 function render(){
- const content=({home,study,library,add:addPage,shelves:shelfPage,rules:rulePage,settings,account}[page]||home)();
+ const content=({home,study,library,add:addPage,shelves:shelfPage,rules:rulePage,'rule-exercises':ruleExercisesIndex,'word-exercises':wordExercisePage,settings,account}[page]||home)();
  let popup='';
  if(editId)popup=cardEditor();
  else if(ruleEditId)popup=ruleEditor();
+ else if(wordAddDraft)popup=wordAddEditor();
  else if(shelfDraft)popup=shelfEditor();
  else if(modal==='guest-invite')popup='<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>';
  else if(modal==='congratulations')popup='<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+completedPractices().length+' практики!</b><h2>Так держать!</h2><p class="muted">Ты завершила ещё три занятия. Продолжай в своём ритме!</p><button class="primary" data-action="close">Продолжить →</button></div></div>';
@@ -532,10 +555,19 @@ function cardEditor(){
 async function importData(file){if(!file)return;try{const x=JSON.parse(await file.text());if(!Array.isArray(x.cards))throw Error('Wrong format');const ids=new Set(state.cards.map(c=>c.id));let n=0;for(const c of x.cards){if(c.id&&c.ru&&c.en&&Array.isArray(c.history)&&!ids.has(c.id)){state.cards.push(c);ids.add(c.id);n++}}save();render();notify('Импортировано карточек: '+n)}catch{notify('Не удалось импортировать файл')}}
 const examples=[['Разобраться, выяснить','figure out','I need to figure out what happened.','Мне нужно разобраться, что произошло.'],['Тем не менее','nevertheless','Nevertheless, I decided to go.','Тем не менее я решила пойти.'],['В итоге, со временем','eventually','Eventually, everything worked out.','В итоге всё получилось.'],['Случайно встретить','run into','I ran into an old friend.','Я случайно встретила старого друга.'],['Ладить с кем-то','get along with','I get along with my team.','Я хорошо лажу со своей командой.'],['Принимать как должное','take for granted',"Don't take it for granted.",'Не воспринимай это как должное.']];
 document.addEventListener('click',e=>{
- const b=e.target.closest('[data-page],[data-action]');
+ const b=e.target.closest('[data-page],[data-action],[data-nav-group]');
  if(!b)return;
+ if(b.dataset.navGroup){
+   const group=b.dataset.navGroup;
+   const wasOpen=navExpanded===group;
+   navExpanded=wasOpen?null:group;
+   mobileNavExpanded=wasOpen&&mobileNavExpanded===group?null:group;
+   render();return;
+ }
  if(b.dataset.page){
    const dest=b.dataset.page;
+   mobileNavExpanded=null;
+   navExpanded=navGroupForPage(dest);
    if(dest==='study'){
      if(!lesson||lesson.completed)begin('new');
      else {page='study';render()}
