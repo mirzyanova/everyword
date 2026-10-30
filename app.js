@@ -581,6 +581,28 @@ function speakEnglish(text){
     speech.speak(utterance);
   }catch(e){console.error('Everyword pronunciation failed',e);notify('Не удалось озвучить слово.')}
 }
+let wordAudioToken=0;
+function speakWordExercise(item,answered){
+ if(!item)return;
+ if(answered){speakEnglish(item.sentence);return}
+ if(typeof window.speechSynthesis==='undefined'||typeof SpeechSynthesisUtterance==='undefined'){
+  notify('Озвучка недоступна в этом браузере.');return;
+ }
+ const speech=window.speechSynthesis;
+ speech.cancel();
+ const token=++wordAudioToken;
+ const parts=[String(item.before||'').trim(),String(item.after||'').trim()].filter(Boolean);
+ const voices=speech.getVoices?.()||[];
+ const voice=voices.find(v=>v.lang?.toLowerCase().replace('_','-')==='en-us')||voices.find(v=>v.lang?.toLowerCase().startsWith('en'));
+ function play(index){
+  if(token!==wordAudioToken||index>=parts.length)return;
+  const u=new SpeechSynthesisUtterance(parts[index]);
+  u.lang='en-US';u.rate=0.92;if(voice)u.voice=voice;
+  u.onend=()=>{if(index+1<parts.length)setTimeout(()=>play(index+1),450)};
+  speech.speak(u);
+ }
+ play(0);
+}
 function flip(){if(!currentTask())return;flipped=!flipped;if(flipped)shown=true;render()}
 function skip(){if(skipLesson(lesson)){flipped=false;shown=false;undo=null;render()}else notify('Это единственная оставшаяся карточка')}
 function scheduleFSRS(c,remembered){
@@ -709,7 +731,7 @@ document.addEventListener('click',e=>{
    }
    render();
  }
- else if(a==='word-ex-speak'){const item=wordExercise?.items?.[wordExercise.index];if(item)speakEnglish(item.sentence)}
+ else if(a==='word-ex-speak'){const item=wordExercise?.items?.[wordExercise.index];if(item)speakWordExercise(item,Boolean(wordExercise.answers[wordExercise.index]))}
  else if(a==='word-lookup')lookupWord(b.dataset.word);
  else if(a==='word-lookup-close'){wordPopup=null;render()}
  else if(a==='word-add'){
