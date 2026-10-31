@@ -1,5 +1,5 @@
 import { createCloudBridge } from './cloud-sync.js?v=20261030-20';
-import { JOKES } from './jokes.js?v=20261028-11';
+import { JOKES } from './jokes.js?v=20261031-21';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
 import { createWordExercise } from './word-exercises.js?v=20261030-19';
 
@@ -177,7 +177,7 @@ function mobile(){
  return items+'<nav class="mobile mobile-four" aria-label="Основные разделы">'+roots.map(([dest,label,group])=>rootButton(dest,label,group)).join('')+'</nav>';
 }
 const heading=(k,t,s)=>'<div class="eyebrow">'+k+'</div><h1>'+t+'</h1><div class="muted">'+s+'</div>';
-const JOKE_ROTATION_KEY='everyword-jokes-rotation-v1';
+const JOKE_ROTATION_KEY='everyword-nikulin-jokes-rotation-v1';
 function drawJoke(){
   if(!JOKES.length)return 'Сегодня анекдоты сбежали. Видимо, у них выходной.';
   let saved={};
@@ -201,7 +201,7 @@ function drawJoke(){
   return JOKES[index];
 }
 let jokeOfVisit=drawJoke();
-function jokeMarkup(){return safe(jokeOfVisit).replaceAll(' — ',String.fromCharCode(10)+'— ')}
+function jokeMarkup(){return safe(jokeOfVisit)}
 const PRACTICE_EXPLANATIONS={
  new:'Слова, добавленные сегодня. Если сегодня новых нет — слова из последнего пополнения. Каждое слово проверяется в двух направлениях. Результаты учитываются в расписании повторений.',
  due:'Слова, которые пора повторить по индивидуальному расписанию. Алгоритм учитывает, насколько хорошо ты их помнишь, и определяет дату следующего повторения.',
@@ -238,7 +238,7 @@ function home(){
  '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">30 СЛОВ ЗА ЗАНЯТИЕ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="wordex-home-link"><div><div class="eyebrow">СЛОВА В КОНТЕКСТЕ</div><h2>Упражнения со словами</h2><p>10 предложений с пропусками из выбранной группы слов.</p></div><button class="secondary" data-page="word-exercises">Попробовать →</button></section>'+
  '<section class="add-words-strip"><div><div class="eyebrow">ПОПОЛНИ КОЛЛЕКЦИЮ</div><h2>Появились новые слова?</h2><p class="muted">Сохрани их и возвращайся к ним в следующих занятиях.</p></div><button class="secondary" data-page="add">＋ Добавить слова</button></section>'+
- '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
+ '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ ОТ НИКУЛИНА</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
 }
 function speakerButton(){
  return '<button type="button" class="speak-button" data-action="speak" aria-label="Произнести по-английски" title="Прослушать произношение"><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>';
