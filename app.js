@@ -97,7 +97,7 @@ function checked(){return activeCards().filter(c=>daily(c).length).length}
 function tally(){let a=0,b=0;activeCards().forEach(c=>{const x=daily(c)[0];if(x){if(x.remembered)a++;else b++}});return [a,b]}
 function due(c){return c.fsrs && new Date(c.fsrs.due)<=now()}
 function fresh(c){return !c.fsrs}
-function archive(c){return c.fsrs&&c.fsrs.scheduled_days>=30&&new Set((c.history||[]).filter(x=>x.remembered&&!x.practice).map(x=>x.at.slice(0,10))).size>=5}
+function archive(c){return c.fsrs&&c.fsrs.scheduled_days>=30&&new Set((c.history||[]).filter(x=>x.remembered&&!x.practice).map(x=>localDay(x.at))).size>=5}
 function stats(){const cards=activeCards();return {all:cards.length,new:cards.filter(fresh).length,due:dailyReview().cards.length,hard:cards.filter(c=>c.difficult).length}}
 function add(ru,en,example='',exampleRu='',note=''){
   ru=String(ru).trim();en=String(en).trim();
@@ -245,7 +245,7 @@ function home(){
  '<section class="home-heading"><div class="eyebrow">Личное пространство</div><h1 class="home-title"><span class="home-title-lead">Английский,</span><span class="home-title-tail">в своём ритме</span></h1><p class="muted home-subtitle">Все слова в одном месте. Возвращайся к ним на пути к европейскому паспорту.</p><span class="home-sun" aria-hidden="true"></span></section>'+
  '<div class="stats"><div class="stat"><span>В коллекции</span><b>'+s.all+'</b><span>слов и выражений</span></div><div class="stat"><span>Последнее пополнение</span><b>'+group.cards.length+'</b><span>для нового занятия</span></div><div class="stat"><span>Сложные слова</span><b>'+s.hard+'</b><span>для повторения</span></div></div>'+
  '<section class="new-words-hero practice-with-info">'+modeInfo('new')+'<div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day)+' · '+group.cards.length+' '+(group.cards.length===1?'слово':'слов')+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
- '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' · сложные, новые и старые':'Пока нет слов для повторения')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
+ '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' в подборке · '+dailyReview().cards.filter(c=>distinctStudyDays(c).includes(today())).length+' уже повторяли сегодня':'Пока нет слов для повторения')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
  '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">30 СЛОВ ЗА ЗАНЯТИЕ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="wordex-home-link"><div><div class="eyebrow">СЛОВА В КОНТЕКСТЕ</div><h2>Упражнения со словами</h2><p>10 предложений с пропусками из выбранной группы слов.</p></div><button class="secondary" data-page="word-exercises">Попробовать →</button></section>'+
  '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ ОТ НИКУЛИНА</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
@@ -866,6 +866,7 @@ document.addEventListener('click',e=>{
    const dest=b.dataset.page;
    mobileNavExpanded=null;
    navExpanded=navGroupForPage(dest);
+   if(dest==='rules'){ruleOpenId=null;grammarQuiz=null}
    if(dest==='study'){
      if(!lesson||lesson.completed)begin('new');
      else {page='study';render()}
