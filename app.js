@@ -6,6 +6,14 @@ import { createWordExercise } from './word-exercises.js?v=20261030-19';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
 let state=loadGuest(),accountId=null,page='home',queue=[],lesson=null,shown=false,flipped=false,practice=false,sessionRated=0,editId=null,deleteConfirm=false,shelfEditId=null,shelfDraft=null,shelfQuery='',shelfDeleteConfirm=false,ruleOpenId=null,ruleEditId=null,ruleDeleteConfirm=false,grammarQuiz=null,navExpanded=null,mobileNavExpanded=null,wordExercise=null,wordExerciseSource='new',wordExerciseShelf='',wordPopup=null,wordAddDraft=null,guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1',done=new Set(),undo=null,modal=null,search='',fsrs=null,rating=null;
+const SIDEBAR_KEY='everyword-sidebar-collapsed-v1';
+let sidebarCollapsed=(()=>{
+ try{
+  const saved=localStorage.getItem(SIDEBAR_KEY);
+  if(saved!==null)return saved==='1';
+  return !!window.matchMedia?.('(min-width:741px) and (max-width:1050px) and (orientation:portrait)').matches;
+ }catch{return false;}
+})();
 const now=()=>new Date(),id=()=>crypto.randomUUID(),norm=s=>String(s||'').trim().toLocaleLowerCase(),safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY));if(Array.isArray(x?.cards))return x}catch{}return {cards:[]}}
 function loadGuest(){
@@ -240,7 +248,6 @@ function home(){
  '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' · сложные, новые и старые':'Пока нет слов для повторения')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
  '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">30 СЛОВ ЗА ЗАНЯТИЕ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="wordex-home-link"><div><div class="eyebrow">СЛОВА В КОНТЕКСТЕ</div><h2>Упражнения со словами</h2><p>10 предложений с пропусками из выбранной группы слов.</p></div><button class="secondary" data-page="word-exercises">Попробовать →</button></section>'+
- '<section class="add-words-strip"><div><div class="eyebrow">ПОПОЛНИ КОЛЛЕКЦИЮ</div><h2>Появились новые слова?</h2><p class="muted">Сохрани их и возвращайся к ним в следующих занятиях.</p></div><button class="secondary" data-page="add">＋ Добавить слова</button></section>'+
  '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ ОТ НИКУЛИНА</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
 }
 function speakerButton(){
@@ -661,7 +668,13 @@ function render(){
  else if(shelfDraft)popup=shelfEditor();
  else if(modal==='guest-invite')popup='<div class="overlay"><div class="popup popup-invite"><div class="eyebrow">ПЕРВОЕ ЗАНЯТИЕ</div><h2>Хочешь сохранить результат?</h2><p class="muted">Твои карточки уже здесь. Войди, чтобы продолжить обучение и с других устройств.</p><div class="invite-actions"><button class="primary" data-action="invite-login">Сохранить прогресс →</button><button class="secondary" data-action="invite-later">Пока без аккаунта</button></div></div></div>';
  else if(modal==='congratulations')popup='<div class="overlay"><div class="popup"><div class="eyebrow">ТВОЙ ПРОГРЕСС</div><b>'+completedPractices().length+' практики!</b><h2>Так держать!</h2><p class="muted">Ты завершила ещё три занятия. Продолжай в своём ритме!</p><button class="primary" data-action="close">Продолжить →</button></div></div>';
- root.innerHTML='<div class="app">'+sidebar()+'<main class="main">'+content+'</main>'+mobile()+'</div>'+popup;
+ root.innerHTML='<div class="app'+(sidebarCollapsed?' sidebar-is-collapsed':'')+'">'+
+ sidebar()+
+ '<button type="button" class="sidebar-toggle" data-action="sidebar-toggle" aria-label="'+(sidebarCollapsed?'Показать боковую панель':'Скрыть боковую панель')+'" aria-expanded="'+String(!sidebarCollapsed)+'" title="'+(sidebarCollapsed?'Показать меню':'Скрыть меню')+'">'+
+ (sidebarCollapsed?'☰':'‹')+'</button>'+
+ '<main class="main">'+content+'</main>'+
+ (page==='home'?'<button type="button" class="home-add-fab" data-page="add" aria-label="Добавить слова" title="Добавить слова">+</button>':'')+
+ mobile()+'</div>'+popup;
 }
 function speakEnglish(text){
   if(!text||!text.trim())return;
@@ -860,6 +873,11 @@ document.addEventListener('click',e=>{
    return;
  }
  const a=b.dataset.action;
+ if(a==='sidebar-toggle'){
+  sidebarCollapsed=!sidebarCollapsed;
+  try{localStorage.setItem(SIDEBAR_KEY,sidebarCollapsed?'1':'0')}catch{}
+  render();return;
+ }
  if(a==='begin')begin('new');
  else if(a==='practice')begin('free');
  else if(a==='due')begin('due');
