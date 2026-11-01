@@ -33,6 +33,7 @@ function switchAccount(user){
   if(uid===accountId)return;
   const previous=accountId;
   if(!previous){try{localStorage.setItem(GUEST_KEY,JSON.stringify(state))}catch(e){console.error(e)}}
+  routeMemory.clear();
   accountId=uid;queue=[];lesson=null;shown=false;flipped=false;practice=false;sessionRated=0;editId=null;shelfEditId=null;shelfDraft=null;ruleOpenId=null;ruleEditId=null;ruleDeleteConfirm=false;grammarQuiz=null;wordExercise=null;wordPopup=null;wordAddDraft=null;navExpanded=null;mobileNavExpanded=null;undo=null;modal=null;page='home';search='';
   if(!uid){state=loadGuest();guestPrompted=localStorage.getItem(GUEST_PROMPT)==='1';render();return}
   let saved=loadAccount(uid);
@@ -788,9 +789,59 @@ function cardEditor(){
 }
 async function importData(file){if(!file)return;try{const x=JSON.parse(await file.text());if(!Array.isArray(x.cards))throw Error('Wrong format');const ids=new Set(state.cards.map(c=>c.id));let n=0;for(const c of x.cards){if(c.id&&c.ru&&c.en&&Array.isArray(c.history)&&!ids.has(c.id)){state.cards.push(c);ids.add(c.id);n++}}save();render();notify('Импортировано карточек: '+n)}catch{notify('Не удалось импортировать файл')}}
 const examples=[['Разобраться, выяснить','figure out','I need to figure out what happened.','Мне нужно разобраться, что произошло.'],['Тем не менее','nevertheless','Nevertheless, I decided to go.','Тем не менее я решила пойти.'],['В итоге, со временем','eventually','Eventually, everything worked out.','В итоге всё получилось.'],['Случайно встретить','run into','I ran into an old friend.','Я случайно встретила старого друга.'],['Ладить с кем-то','get along with','I get along with my team.','Я хорошо лажу со своей командой.'],['Принимать как должное','take for granted',"Don't take it for granted.",'Не воспринимай это как должное.']];
+// Browser history stores only opaque entry keys, not vocabulary or private account data.
+const routeMemory=new Map();
+let routeCount=0;
+const routeIdentity=()=>[page,ruleOpenId||'',!!grammarQuiz,!!wordExercise].join('|');
+function routeSnapshot(){
+ return {page,ruleOpenId,grammarQuiz:grammarQuiz?structuredClone(grammarQuiz):null,
+  wordExercise:wordExercise?structuredClone(wordExercise):null};
+}
+function rememberRoute(){
+ const entry=window.history?.state;
+ if(entry?.everywordRoute)routeMemory.set(entry.id,routeSnapshot());
+}
+function initializeBrowserHistory(){
+ if(!window.history?.replaceState)return;
+ const entry=window.history.state;
+ if(!entry?.everywordRoute){
+  const id='ew-'+(++routeCount);
+  window.history.replaceState({everywordRoute:true,id,page,ruleOpenId},'');
+ }
+ rememberRoute();
+ if(typeof window.addEventListener==='function'){
+  window.addEventListener('popstate',event=>{
+   const entry=event.state;
+   if(!entry?.everywordRoute){page='home';ruleOpenId=null;grammarQuiz=null;wordExercise=null;}
+   else{
+    const route=routeMemory.get(entry.id)||{page:entry.page||'home',ruleOpenId:entry.ruleOpenId||null,grammarQuiz:null,wordExercise:null};
+    page=route.page;ruleOpenId=route.ruleOpenId;grammarQuiz=route.grammarQuiz;
+    wordExercise=route.wordExercise;
+   }
+   if(page==='rules'&&ruleOpenId&&!activeRules().some(r=>r.id===ruleOpenId)){
+    ruleOpenId=null;grammarQuiz=null;
+   }
+   navExpanded=navGroupForPage(page);mobileNavExpanded=null;
+   editId=null;ruleEditId=null;wordAddDraft=null;shelfDraft=null;modal=null;
+   render();
+  });
+ }
+}
+function pushBrowserRoute(previous){
+ if(!window.history?.pushState||routeIdentity()===previous)return;
+ const id='ew-'+(++routeCount);
+ routeMemory.set(id,routeSnapshot());
+ window.history.pushState({everywordRoute:true,id,page,ruleOpenId},'');
+}
+
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-page],[data-action],[data-nav-group]');
  if(!b)return;
+ const previousRoute=routeIdentity();
+ rememberRoute();
+ // The delegated action handler is synchronous. Commit a browser entry only
+ // when the visible screen changes; grading or opening menus adds no entry.
+ Promise.resolve().then(()=>pushBrowserRoute(previousRoute));
  if(b.dataset.navGroup){
    const group=b.dataset.navGroup;
    const wasOpen=navExpanded===group;
@@ -1018,6 +1069,7 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('keydown',e=>{if(page!=='study'||e.target.matches('input,textarea,button,select,a')||modal)return;if(e.key===' '||e.key==='Enter'){e.preventDefault();flip()}else if(['ArrowLeft','ArrowRight'].includes(e.key))skip();else if(e.key==='1')grade(false);else if(e.key==='2')grade(true)});
 let startX=null;document.addEventListener('touchstart',e=>{if(e.target.closest('.card')&&!e.target.closest('.speak-button'))startX=e.touches[0].clientX},{passive:true});document.addEventListener('touchend',e=>{if(startX===null)return;const dx=e.changedTouches[0].clientX-startX;startX=null;if(Math.abs(dx)>65){e.preventDefault();skip()}},{passive:false});
+initializeBrowserHistory();
 render();
 async function initialize(){for(const url of ['https://cdn.jsdelivr.net/npm/ts-fsrs@5.4.2/dist/index.mjs','https://unpkg.com/ts-fsrs@5.4.2/dist/index.mjs','https://esm.sh/ts-fsrs@5.4.2?bundle'])try{const lib=await import(url);if(!lib.fsrs||!lib.createEmptyCard)continue;window.fsrsLib=lib;rating=lib.Rating;fsrs=lib.fsrs({request_retention:0.95,enable_short_term:false,learning_steps:[],relearning_steps:[],enable_fuzz:false});render();return}catch(e){console.warn('FSRS source unavailable',e)}notify('Не удалось загрузить FSRS. Проверь интернет.');render()}
 initialize();cloud.init();
