@@ -151,50 +151,150 @@ For shelf operations:
 A shelf can be deleted in the UI using a soft-delete marker `payload.deletedAt` (ISO timestamp) and a fresh `updatedAt`. ChatGPT should not hard-delete rows unless the user explicitly requests permanent deletion and the consequences have been explained.
 
 
-## Grammar rules and reviewed exercises
+## Grammar rules and reviewed exercises — **structured Cambridge-like pages (v2)**
 
-When the user asks "Добавь это правило в Everyword", save a clear, accurate explanation to **public.everyword_rules** in the same Supabase project. Do NOT add grammar automatically during an ordinary discussion.
+This is the **canonical protocol** for adding or updating grammar rules in the connected Everyword project.
 
-Schema: `public.everyword_rules(id uuid, user_id uuid, payload jsonb, updated_at timestamptz)`; RLS is enabled and each user owns only their records. The admin `execute_sql` connection has `auth.uid() = NULL`: resolve the actual authenticated website account from `auth.users`, as for vocabulary cards, and use the existing `auth.users.id`. Do not invent the user UUID.
+**Do not write rules as one unformatted wall of text.** The website renders:
+1. **Общее правило** — short, understandable overview first, not just a label or a vague summary.
+2. **Формула / схема / основные выражения с переводом** — a scannable table or one prominent formula, depending on topic.
+3. **Примеры употребления** — English sentences paired with Russian translations and optional focus highlighting.
+4. **Подробнее** — comparison tables, exceptions, common mistakes, optional lists/notes. Important things appear near the top; no extra clicks are needed.
 
-Each grammar rule has the following payload:
+### Connection, ownership and database
 
-```json
+- Supabase project ID: \`hdczcqtclhxygdlvfibh\`.
+- Table: \`public.everyword_rules\`, columns: \`id uuid PRIMARY KEY, user_id uuid REFERENCES auth.users(id), payload jsonb, updated_at timestamptz\`.
+- Every rule belongs to the real signed-in account. **Admin SQL has \`auth.uid() = NULL\`**; get the correct existing \`auth.users.id\` from the database, verify it is the account owning the user's Everyword cards/rules, and use it explicitly. Never invent or randomly choose a user ID. Never modify another person's records.
+- RLS is enabled; do not weaken policies or touch other app tables.
+- Only change records after an explicit user command such as "Добавь правило в Everyword", "Обнови существующее правило ...", "Допиши раздел ..." or "Добавь упражнения ...". An ordinary grammar discussion is **not** permission to write.
+
+### Structured rule payload
+
+The following is a **schema illustration**, not an instruction to add this example:
+
+\`\`\`json
 {
-  "id": "the same UUID as the database row id",
-  "title": "Past Simple",
-  "summary": "Завершённые действия в прошлом",
-  "explanation": "Объяснение простым русским языком, включая условия употребления, форму, исключения и типичные ошибки.",
-  "examples": [
-    {"en": "I met my friend yesterday.", "ru": "Вчера я встретилась с другом."}
-  ],
-  "questions": [
+  "id": "same UUID as row id",
+  "title": "Вопросы в Present Simple",
+  "summary": "Как выбрать be или do/does при построении вопроса.",
+  "overview": "В Present Simple вопрос с be строится перестановкой; с обычным смысловым глаголом используем do/does. После does основной глагол остаётся в начальной форме.",
+  "referenceTitle": "Как построить вопрос",
+  "reference": [
     {
-      "id": "unique-question-id",
-      "prompt": "She ___ the report before the meeting yesterday.",
-      "options": ["finishes", "finished", "has finished", "was finishing"],
-      "correctIndex": 1,
-      "correctExplanation": "Past Simple: речь о завершённом действии в конкретный момент прошлого.",
-      "wrongExplanations": {
-        "0": "Present Simple — не подходит к конкретному прошедшему моменту.",
-        "2": "Present Perfect обычно не употребляется с yesterday.",
-        "3": "Past Continuous здесь не нужен, потому что речь не о процессе."
-      }
+      "label": "BE",
+      "meaning": "Вопрос о состоянии или качестве",
+      "pattern": "Am/Is/Are + подлежащее + ...?",
+      "note": "Is she shy? — Она застенчивая?"
+    },
+    {
+      "label": "DO / DOES",
+      "meaning": "Вопрос с обычным смысловым глаголом",
+      "pattern": "Do/Does + подлежащее + глагол без to + ...?",
+      "note": "Does she work? — Она работает?"
     }
   ],
+  "examples": [
+    {
+      "en": "Does she like coffee?",
+      "ru": "Ей нравится кофе?",
+      "focus": "Does she like"
+    }
+  ],
+  "sections": [
+    {
+      "type": "table",
+      "title": "Как выбрать do или does",
+      "columns": ["Подлежащее", "Вспомогательный глагол"],
+      "rows": [
+        ["I / you / we / they", "**DO**"],
+        ["He / she / it", "**DOES**"]
+      ],
+      "note": "После does основной глагол не получает -s."
+    },
+    {
+      "type": "mistakes",
+      "title": "Частые ошибки",
+      "items": [
+        {
+          "wrong": "Does she likes coffee?",
+          "right": "Does she like coffee?",
+          "why": "Окончание -s уже есть во вспомогательном does."
+        }
+      ]
+    }
+  ],
+  "explanation": "Legacy source text, if an older rule already had it. Preserve on updates.",
+  "questions": [],
   "quizHistory": [],
-  "createdAt": "ISO 8601 UTC timestamp",
-  "updatedAt": "ISO 8601 UTC timestamp"
+  "createdAt": "2026-10-28T12:00:00.000Z",
+  "updatedAt": "2026-11-01T12:00:00.000Z"
 }
-```
+\`\`\`
 
-**Question rules:** Create **5–7 well-checked multiple-choice questions** per grammar rule when the user requests exercises or when explicitly asking to add the rule *with exercises*. Prefer 4 plausible, grammatically consistent options; ensure exactly one correct answer in the full context. Distractors should reflect actual confusions in the **same tense/time frame** where sensible; avoid a giveaway such as three present-tense choices and one past-tense answer when past tense is obvious. Every option should have a concise reason, especially wrong choices. If more than one option is defensible, **rewrite the question before storing it**. Provide a range of contexts and avoid repetitive templates. All grammar explanations are in natural Russian; English examples remain in English. Do not insert unreviewed/ambiguous tasks.
+**Formatting and exact display behavior:**
+- \`overview\` is **required** for new structured rules: 1–3 plain-language sentences in Russian explaining the overall principle and when it applies. Do not replace it with a vague slogan.
+- \`summary\` is a short description shown in the rules listing, separate from \`overview\`.
+- \`referenceTitle\` and \`reference\` show a table with columns **Конструкция / Значение / Формула-структура**. When only one reference item exists, the site shows it as a prominent centered formula instead. For topics with no single formula, use a comparison of common expressions, schematics, or meanings (e.g. "like / be like / look like"). Include Russian meanings and/or notes; do not force all subjects into a tense formula.
+- \`examples\` render directly **after** the reference block. English must be natural and paired with Russian. \`focus\` is an optional exact substring of \`en\` to highlight the central grammatical construction. Do not invent focus spans that don't appear literally in \`en\`.
+- \`sections\` show *after* examples, immediately in the scroll flow (no tabs, accordions, hidden panels, or required clicks). Use **only** sections that materially clarify the topic; avoid duplicate prose.
+- Supported \`sections[].type\` formats:
+  - \`"table"\` or \`"comparison"\`: \`{type,title,columns:[...],rows:[[...],...],note?}\`; up to four meaningful columns, with consistent cell lengths.
+  - \`"mistakes"\`: \`{type,title,items:[{wrong,right,why},...]}\`. Use for **genuine errors**. If two sentences are both grammatical but have different meanings, use a comparison table instead, not wrong/right.
+  - \`"list"\` or \`"bullets"\`: \`{type,title,items:[{label,text},...]}\`.
+  - \`"formula"\`: \`{type,title,items:[{label,formula,note},...]}\`.
+  - \`"text"\`: \`{type,title,body}\`, short only; prefer tables/schemes whenever they improve scanning.
+- Text inside \`overview\`, \`reference\` and sections supports restrained **bold** using Markdown \`**...**\`. Other Markdown/HTML is not interpreted; do not embed HTML or UI code in the JSON.
+- Preserve original detail and correct distinctions. A concise overview does **not** mean skipping important exceptions or caveats lower on the page.
+- Ensure mobile legibility: short table headers and cells; one complete thought per row; no giant multi-sentence table cells.
+- Existing rules from the old schema may have \`explanation\` and \`examples\` without \`overview/reference/sections\`. The site supports legacy rendering, but on a user's request to reformulate an old rule, populate structured fields and **preserve the original \`explanation\`** as a recoverable copy, even though it is no longer shown once sections exist.
 
-**Operations:** Check for a duplicate rule title under the verified user_id. Create a single fresh `gen_random_uuid()` for a new rule, mirror it in `payload.id`, and construct JSON through `jsonb_build_object` or safely escaped JSON. To update an existing rule, fetch its current payload, preserve `id`, `createdAt` and any `quizHistory`, update the relevant fields and `updatedAt`. Respect `deletedAt` tombstones and user ownership. Never overwrite the user's review history or vocabulary cards.
+### Add a new rule
 
-**Important:** The site's "Составить упражнения" button currently starts a shuffled 5–7-question set drawn from the **saved `payload.questions` bank**. The site does NOT yet make paid, live LLM calls. To add more fresh questions now, the tutor chat can generate and save an additional reviewed batch at the user's explicit request; it is not yet automatic through the site. Do not represent this as live AI generation.
+1. Discuss and validate the grammar explanation in chat first.
+2. On explicit request, read current \`CHATGPT_IMPORT.md\` and select the existing Everyword user in \`auth.users\`; identify their ownership without using \`auth.uid()\`.
+3. Search \`public.everyword_rules\` for the same topic/title, including different names for the same idea, under that \`user_id\`.
+4. If no duplicate, construct the structured payload (\`title,summary,overview,referenceTitle,reference,examples,sections,questions,quizHistory,createdAt,updatedAt,id\`).
+5. Generate one \`gen_random_uuid()\` for the row and mirror exactly in \`payload.id\`.
+6. Insert into \`public.everyword_rules\`. Keep \`user_id\` accurate. Leave unrelated app data unchanged.
+7. **Verify** the saved row from Supabase (not just the SQL execution result): check title, section/reference/example count, user ID, and prepared exercise count.
 
-As for cards, after executing an authorized SQL write, re-query that exact record and report its title and question count. If the database rejects a write, report its exact error.
+### Update an existing rule (very important)
+
+1. **Look up and read the complete current JSON payload** from \`public.everyword_rules\` for the verified user and desired topic before doing any update. Do not replace an existing rule with a new row.
+2. Preserve **\`id\`, \`user_id\`, \`createdAt\`, \`quizHistory\`, all existing practice results, \`questions\`** (unless changes to exercises are specifically requested), and all unrelated fields.
+3. If transitioning from old text-only explanation to the new layout, fill \`overview\`, \`referenceTitle\`, \`reference\`, \`sections\` and add optional \`focus\` to existing examples. **Preserve** original \`payload.explanation\` intact; do not lose any important learning point from it.
+4. If changing a single section, preserve all other sections (including their order), examples and questions.
+5. Update in place with an **atomic, scoped JSONB merge** (\`payload = payload || <jsonb fields changed>\` or \`jsonb_set\`). Do **not** replace \`payload\` with a smaller object; don't blank out arrays or reset history. Update both \`payload.updatedAt\` (valid ISO 8601 UTC) and the table's \`updated_at\`.
+6. Guard against concurrent edits when possible by checking the previously read \`updated_at\` in the UPDATE condition; if zero rows changed, reread and reconcile before trying again.
+7. Requery the exact row and verify the edited content and preservation of IDs, questions and history. Report exactly what changed.
+
+### Exercises (same as before)
+
+When user explicitly asks to save new exercises, create **5–7 checked multiple-choice questions** for the rule. Prefer four *plausible, nearby* options, not three obviously different choices and one grammatical answer. Ensure precisely one answer fits the complete sentence; rewrite ambiguous questions. Store each as:
+
+\`\`\`json
+{
+  "id": "unique stable question id",
+  "prompt": "She ___ the report yesterday.",
+  "options": ["finishes", "finished", "has finished", "was finishing"],
+  "correctIndex": 1,
+  "correctExplanation": "Past Simple: завершённое действие с конкретным временем yesterday.",
+  "wrongExplanations": {
+    "0": "Present Simple не подходит к указанному конкретному прошедшему времени.",
+    "2": "Present Perfect здесь не сочетается с yesterday.",
+    "3": "Past Continuous был бы нужен для обозначения процесса в контексте."
+  }
+}
+\`\`\`
+
+Exercise rules:
+- Store them in \`payload.questions\`, in addition to (not in place of) the content sections. The website starts a shuffled 5–7-question set **from already saved questions**.
+- When adding more questions to an existing rule, append/review/deduplicate as requested rather than silently deleting older ones. Preserve \`quizHistory\`.
+- The site currently does **not** call a paid LLM to generate fresh exercises on demand; ChatGPT can prepare and save reviewed questions when explicitly asked. Do not claim otherwise.
+
+**After every authorized write**, requery the row; report the rule's title, operation (new/edit), modified parts, and count of saved quiz questions. If there is any error, report it and do not claim the change succeeded.
+
 
 ## Context exercises for existing vocabulary cards
 
