@@ -1,6 +1,7 @@
 import { createCloudBridge } from './cloud-sync.js?v=20261030-20';
 import { JOKES } from './jokes.js?v=20261031-21';
 import { makeLesson, answerLesson, skipLesson, shuffled } from './study-engine.js?v=20261029-17';
+import { localDay, distinctStudyDays, hasScheduledToday, dailyReviewSelection } from './review-policy.js?v=20261101-23';
 import { createWordExercise } from './word-exercises.js?v=20261030-19';
 
 const KEY='everyword-v1',GUEST_KEY='everyword-guest-v1',GUEST_PROMPT='everyword-guest-welcome-shown-v1',USER_PREFIX='everyword-user-v1:',LEGACY_OWNER='everyword-legacy-owner-v1',root=document.querySelector('#app'),toastEl=document.querySelector('#toast');
@@ -63,7 +64,8 @@ function maybeInviteAfterLesson(){
 }
 function notify(s){toastEl.textContent=s;toastEl.style.display='block';clearTimeout(notify.timer);notify.timer=setTimeout(()=>toastEl.style.display='none',3000)}
 function today(){const d=now();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
-function daily(c){return (c.history||[]).filter(x=>x.at.slice(0,10)===today())}
+function daily(c){return (c.history||[]).filter(x=>localDay(x.at)===today())}
+function dailyReview(){return dailyReviewSelection(activeCards(),today(),10)}
 function activeCards(){return state.cards.filter(c=>!c.deletedAt)}
 function completedPractices(){return Array.isArray(state.practices)?state.practices:[]}
 function shelves(){return Array.isArray(state.shelves)?state.shelves:[]}
@@ -87,7 +89,7 @@ function tally(){let a=0,b=0;activeCards().forEach(c=>{const x=daily(c)[0];if(x)
 function due(c){return c.fsrs && new Date(c.fsrs.due)<=now()}
 function fresh(c){return !c.fsrs}
 function archive(c){return c.fsrs&&c.fsrs.scheduled_days>=30&&new Set((c.history||[]).filter(x=>x.remembered&&!x.practice).map(x=>x.at.slice(0,10))).size>=5}
-function stats(){const cards=activeCards();return {all:cards.length,new:cards.filter(fresh).length,due:cards.filter(c=>c.fsrs&&due(c)).length,hard:cards.filter(c=>c.difficult).length}}
+function stats(){const cards=activeCards();return {all:cards.length,new:cards.filter(fresh).length,due:dailyReview().cards.length,hard:cards.filter(c=>c.difficult).length}}
 function add(ru,en,example='',exampleRu='',note=''){
   ru=String(ru).trim();en=String(en).trim();
   if(!ru||!en)return false;
@@ -116,7 +118,7 @@ function current(){const task=currentTask();return task?state.cards.find(c=>c.id
 function begin(kind='new',shelfId=null){
  const cards=activeCards();
  const selected=kind==='new'?latestAddedGroup().cards:
-  kind==='due'?cards.filter(c=>c.fsrs&&due(c)):
+  kind==='due'?dailyReview().cards:
   kind==='hard'?cards.filter(c=>c.difficult):
   kind==='shelf'?cards.filter(c=>activeShelves().find(sh=>sh.id===shelfId)?.cardIds.includes(c.id)):
   shuffled(cards).slice(0,30);
@@ -204,7 +206,7 @@ let jokeOfVisit=drawJoke();
 function jokeMarkup(){return safe(jokeOfVisit)}
 const PRACTICE_EXPLANATIONS={
  new:'Слова, добавленные сегодня. Если сегодня новых нет — слова из последнего пополнения. Каждое слово проверяется в двух направлениях. Результаты учитываются в расписании повторений.',
- due:'Слова, которые пора повторить по индивидуальному расписанию. Алгоритм учитывает, насколько хорошо ты их помнишь, и определяет дату следующего повторения.',
+ due:'Обязательное повторение: все сложные и ещё не изученные слова, слова по расписанию FSRS и повторения в разные календарные дни. Дополнительно — десять старых слов. Несколько занятий за день не считаются разными днями.',
  free:'30 случайных слов из всей коллекции. После завершения можно начать новую практику с другой случайной выборкой. Все результаты учитываются в расписании повторений.',
  hard:'Слова, которые не удалось вспомнить хотя бы один раз за занятие. Здесь можно отдельно потренировать их и улучшить запоминание. Результаты также учитываются в общем расписании.',
  shelf:'Занятие только со словами из выбранной тематической полки. Результаты влияют на общее расписание повторений, как и в других практиках.'
@@ -234,7 +236,7 @@ function home(){
  '<section class="home-heading"><div class="eyebrow">Личное пространство</div><h1 class="home-title"><span class="home-title-lead">Английский,</span><span class="home-title-tail">в своём ритме</span></h1><p class="muted home-subtitle">Все слова в одном месте. Возвращайся к ним на пути к европейскому паспорту.</p><span class="home-sun" aria-hidden="true"></span></section>'+
  '<div class="stats"><div class="stat"><span>В коллекции</span><b>'+s.all+'</b><span>слов и выражений</span></div><div class="stat"><span>Последнее пополнение</span><b>'+group.cards.length+'</b><span>для нового занятия</span></div><div class="stat"><span>Сложные слова</span><b>'+s.hard+'</b><span>для повторения</span></div></div>'+
  '<section class="new-words-hero practice-with-info">'+modeInfo('new')+'<div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day)+' · '+group.cards.length+' '+(group.cards.length===1?'слово':'слов')+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
- '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ПО РАСПИСАНИЮ FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' к повторению':'Все запланированные повторения выполнены')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
+ '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?s.due+' '+(s.due===1?'слово':s.due%10>=2&&s.due%10<=4&&(s.due%100<12||s.due%100>14)?'слова':'слов')+' · сложные, новые и старые':'Пока нет слов для повторения')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
  '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">30 СЛОВ ЗА ЗАНЯТИЕ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. Сейчас: '+s.hard+'.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="wordex-home-link"><div><div class="eyebrow">СЛОВА В КОНТЕКСТЕ</div><h2>Упражнения со словами</h2><p>10 предложений с пропусками из выбранной группы слов.</p></div><button class="secondary" data-page="word-exercises">Попробовать →</button></section>'+
  '<section class="add-words-strip"><div><div class="eyebrow">ПОПОЛНИ КОЛЛЕКЦИЮ</div><h2>Появились новые слова?</h2><p class="muted">Сохрани их и возвращайся к ним в следующих занятиях.</p></div><button class="secondary" data-page="add">＋ Добавить слова</button></section>'+
@@ -517,7 +519,7 @@ function wordSourceCards(source,shelfId){
  const all=activeCards();
  if(source==='new')return latestAddedGroup().cards;
  if(source==='hard')return all.filter(c=>c.difficult);
- if(source==='due')return all.filter(c=>c.fsrs&&due(c));
+ if(source==='due')return dailyReview().cards;
  if(source==='shelf')return all.filter(c=>activeShelves().find(sh=>sh.id===shelfId)?.cardIds.includes(c.id));
  return all;
 }
@@ -705,11 +707,15 @@ function flip(){if(!currentTask())return;flipped=!flipped;if(flipped)shown=true;
 function skip(){if(skipLesson(lesson)){flipped=false;shown=false;undo=null;render()}else notify('Это единственная оставшаяся карточка')}
 function scheduleFSRS(c,remembered){
  if(!fsrs)return false;
+ // Only one FSRS update per word per LOCAL CALENDAR DAY, even after 10 sessions.
+ // A same-day miss still sets the permanent difficult flag in grade().
+ if(hasScheduledToday(c,today()))return true;
  try{
-  const input=c.fsrs?{...c.fsrs,due:new Date(c.fsrs.due),last_review:c.fsrs.last_review?new Date(c.fsrs.last_review):undefined}:window.fsrsLib.createEmptyCard(new Date(c.createdAt));
+  const input=c.fsrs?{...c.fsrs,due:new Date(c.fsrs.due),last_review:c.fsrs.last_review?new Date(c.fsrs.last_review):undefined}:window.fsrsLib.createEmptyCard(now());
   const result=fsrs.next(input,now(),remembered?rating.Good:rating.Again);
   if(!result?.card?.due || !Number.isFinite(new Date(result.card.due).getTime()))throw Error('Недействительная дата FSRS');
   c.fsrs={...result.card,due:new Date(result.card.due).toISOString(),last_review:result.card.last_review?new Date(result.card.last_review).toISOString():null};
+  c.lastScheduledStudyDay=today();
   return true;
  }catch(e){
   console.error('Everyword FSRS scheduling failed',e);
@@ -1013,5 +1019,5 @@ document.addEventListener('change',e=>{
 document.addEventListener('keydown',e=>{if(page!=='study'||e.target.matches('input,textarea,button,select,a')||modal)return;if(e.key===' '||e.key==='Enter'){e.preventDefault();flip()}else if(['ArrowLeft','ArrowRight'].includes(e.key))skip();else if(e.key==='1')grade(false);else if(e.key==='2')grade(true)});
 let startX=null;document.addEventListener('touchstart',e=>{if(e.target.closest('.card')&&!e.target.closest('.speak-button'))startX=e.touches[0].clientX},{passive:true});document.addEventListener('touchend',e=>{if(startX===null)return;const dx=e.changedTouches[0].clientX-startX;startX=null;if(Math.abs(dx)>65){e.preventDefault();skip()}},{passive:false});
 render();
-async function initialize(){for(const url of ['https://cdn.jsdelivr.net/npm/ts-fsrs@5.4.2/dist/index.mjs','https://unpkg.com/ts-fsrs@5.4.2/dist/index.mjs','https://esm.sh/ts-fsrs@5.4.2?bundle'])try{const lib=await import(url);if(!lib.fsrs||!lib.createEmptyCard)continue;window.fsrsLib=lib;rating=lib.Rating;fsrs=lib.fsrs({request_retention:0.9,enable_short_term:true,learning_steps:['1m','10m'],relearning_steps:['10m'],enable_fuzz:true});render();return}catch(e){console.warn('FSRS source unavailable',e)}notify('Не удалось загрузить FSRS. Проверь интернет.');render()}
+async function initialize(){for(const url of ['https://cdn.jsdelivr.net/npm/ts-fsrs@5.4.2/dist/index.mjs','https://unpkg.com/ts-fsrs@5.4.2/dist/index.mjs','https://esm.sh/ts-fsrs@5.4.2?bundle'])try{const lib=await import(url);if(!lib.fsrs||!lib.createEmptyCard)continue;window.fsrsLib=lib;rating=lib.Rating;fsrs=lib.fsrs({request_retention:0.95,enable_short_term:false,learning_steps:[],relearning_steps:[],enable_fuzz:false});render();return}catch(e){console.warn('FSRS source unavailable',e)}notify('Не удалось загрузить FSRS. Проверь интернет.');render()}
 initialize();cloud.init();
