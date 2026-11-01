@@ -485,19 +485,27 @@ function nextRuleQuestion(){
  }
  render();
 }
-function ruleEditor(){
- const rule=activeRules().find(r=>r.id===ruleEditId),examples=Array.isArray(rule?.examples)?rule.examples:[];
- return '<div class="overlay"><section class="popup edit-popup rule-edit-popup" role="dialog" aria-modal="true" aria-label="Редактировать правило">'+
-  '<div class="row"><h2>'+(rule?'Редактировать правило':'Новое правило')+'</h2><button class="edit-close" data-action="rule-edit-close" aria-label="Закрыть">×</button></div>'+
-  '<form id="rule-editor"><div class="field"><label>Название *</label><input name="title" required maxlength="120" value="'+safe(rule?.title||'')+'" placeholder="Например, Present Perfect"></div>'+
-  '<div class="field"><label>Коротко: когда используется</label><textarea name="summary" maxlength="350">'+safe(rule?.summary||'')+'</textarea></div>'+
-  '<div class="field"><label>Подробное объяснение *</label><textarea class="rule-explanation-input" name="explanation" required placeholder="Запиши условия, исключения и важные нюансы">'+safe(rule?.explanation||'')+'</textarea></div>'+
-  '<div class="field"><label>Примеры (английский | русский, по одному в строке)</label><textarea name="examples" placeholder="I have already eaten. | Я уже поела.">'+safe(examples.map(x=>x.en+' | '+x.ru).join('\n'))+'</textarea></div>'+
-  '<div class="edit-actions"><button class="primary" type="submit">Сохранить правило</button><button class="secondary" data-action="rule-edit-close" type="button">Отмена</button></div></form>'+
-  (rule?(ruleDeleteConfirm?'<div class="delete-confirm"><p>Удалить правило и связанные с ним упражнения? Слова в словаре не изменятся.</p><button class="delete-button" data-action="rule-delete">Удалить правило</button><button class="link" data-action="rule-cancel-delete">Отмена</button></div>':'<button class="delete-link" data-action="rule-ask-delete">Удалить правило</button>'):'')+
-  '</section></div>';
-}
 
+function ruleEditor(){
+ const rule=activeRules().find(r=>r.id===ruleEditId),
+  examples=Array.isArray(rule?.examples)?rule.examples:[],
+  refs=Array.isArray(rule?.reference)?rule.reference:[],
+  structured=Array.isArray(rule?.sections)&&rule.sections.length>0;
+ return '<div class="overlay"><section class="popup edit-popup rule-edit-popup" role="dialog" aria-modal="true" aria-label="Редактировать правило">'+
+ '<div class="row"><h2>'+(rule?'Редактировать правило':'Новое правило')+'</h2><button class="edit-close" data-action="rule-edit-close" aria-label="Закрыть">×</button></div>'+
+ '<form id="rule-editor"><div class="field"><label>Название *</label><input name="title" required maxlength="160" value="'+safe(rule?.title||'')+'" placeholder="Например, Present Perfect"></div>'+
+ '<div class="field"><label>Описание для списка правил</label><textarea name="summary" maxlength="350">'+safe(rule?.summary||'')+'</textarea></div>'+
+ '<div class="field"><label>Общее правило — сначала короткое и понятное объяснение *</label><textarea name="overview" required rows="4" placeholder="Объясни смысл конструкции без лишних подробностей">'+safe(rule?.overview||rule?.summary||'')+'</textarea></div>'+
+ '<div class="field"><label>Название таблицы или схемы</label><input name="referenceTitle" maxlength="140" value="'+safe(rule?.referenceTitle||'Основная конструкция')+'" placeholder="Например, Основные конструкции"></div>'+
+ '<div class="field"><label>Выражения и формулы</label><textarea name="reference" rows="5" placeholder="Конструкция | Перевод или смысл | Схема | Примечание">'+safe(refs.map(x=>[x.label||'',x.meaning||'',x.pattern||'',x.note||''].join(' | ')).join('\n'))+'</textarea>'+
+ '<p class="rule-editor-hint">Одна строка — одна конструкция. Разделяй четыре поля знаком |. Если схема одна, будет показана крупно, иначе — таблицей.</p></div>'+
+ '<div class="field"><label>Примеры (английский | русский, по одному в строке)</label><textarea name="examples" rows="5" placeholder="I have already eaten. | Я уже поела.">'+safe(examples.map(x=>x.en+' | '+x.ru).join('\n'))+'</textarea></div>'+
+ (structured?'<p class="rule-editor-hint">Дополнительные таблицы, сравнения и частые ошибки этого правила уже оформлены в отдельные блоки. Они сохранятся без изменений. Для их редактирования попроси ChatGPT обновить правило в Everyword.</p>':
+ '<div class="field"><label>Дополнительные пояснения</label><textarea class="rule-explanation-input" name="explanation" rows="8" placeholder="Исключения, типичные ошибки и подробности">'+safe(rule?.explanation||'')+'</textarea></div>')+
+ '<div class="edit-actions"><button class="primary" type="submit">Сохранить правило</button><button class="secondary" data-action="rule-edit-close" type="button">Отмена</button></div></form>'+
+ (rule?(ruleDeleteConfirm?'<div class="delete-confirm"><p>Удалить правило и связанные упражнения? История слов не изменится.</p><button class="delete-button" data-action="rule-delete">Удалить правило</button><button class="link" data-action="rule-cancel-delete">Отмена</button></div>':'<button class="delete-link" data-action="rule-ask-delete">Удалить правило</button>'):'')+
+ '</section></div>';
+}
 
 function ruleExercisesIndex(){
  const list=activeRules().filter(r=>Array.isArray(r.questions)&&r.questions.length);
@@ -928,19 +936,36 @@ document.addEventListener('submit',e=>{
  }
  if(e.target.id==='rule-editor'){
    e.preventDefault();
-   const data=new FormData(e.target),title=String(data.get('title')||'').trim(),
-     summary=String(data.get('summary')||'').trim(),explanation=String(data.get('explanation')||'').trim();
-   if(!title||!explanation){notify('Нужны название и объяснение правила.');return}
-   const examples=String(data.get('examples')||'').split(/\r?\n/).map(line=>{
-     const parts=line.split('|');return {en:String(parts.shift()||'').trim(),ru:parts.join('|').trim()};
-   }).filter(item=>item.en);
+   const data=new FormData(e.target),
+    title=String(data.get('title')||'').trim(),
+    summary=String(data.get('summary')||'').trim(),
+    overview=String(data.get('overview')||'').trim(),
+    referenceTitle=String(data.get('referenceTitle')||'').trim(),
+    explanation=String(data.get('explanation')||'').trim();
+   if(!title||!overview){notify('Нужны название и общее объяснение правила.');return}
+   const reference=String(data.get('reference')||'').split(/\r?\n/).map(line=>{
+    const bits=line.split(/\s+\|\s+/);
+    return {label:String(bits[0]||'').trim(),meaning:String(bits[1]||'').trim(),
+     pattern:String(bits[2]||'').trim(),note:bits.slice(3).join(' | ').trim()};
+   }).filter(x=>x.label||x.meaning||x.pattern);
+   const incoming=String(data.get('examples')||'').split(/\r?\n/).map(line=>{
+    const parts=line.split(/\s+\|\s+/);
+    return {en:String(parts[0]||'').trim(),ru:parts.slice(1).join(' | ').trim()};
+   }).filter(x=>x.en);
    let rule=activeRules().find(r=>r.id===ruleEditId);
-   if(rule){Object.assign(rule,{title,summary,explanation,examples,updatedAt:now().toISOString()})}
-   else{
-     const at=now().toISOString();
-     rule={id:id(),title,summary,explanation,examples,questions:[],quizHistory:[],createdAt:at,updatedAt:at};
-     if(!Array.isArray(state.rules))state.rules=[];
-     state.rules.push(rule);
+   const examples=incoming.map(x=>{
+    const old=rule?.examples?.find(y=>y.en===x.en);
+    return old?.focus?{...x,focus:old.focus}:x;
+   });
+   if(rule){
+    Object.assign(rule,{title,summary,overview,referenceTitle,reference,examples,updatedAt:now().toISOString()});
+    if(!Array.isArray(rule.sections)||!rule.sections.length)rule.explanation=explanation;
+   }else{
+    const at=now().toISOString();
+    rule={id:id(),title,summary,overview,referenceTitle,reference,explanation,
+      examples,sections:[],questions:[],quizHistory:[],createdAt:at,updatedAt:at};
+    if(!Array.isArray(state.rules))state.rules=[];
+    state.rules.push(rule);
    }
    ruleEditId=null;ruleDeleteConfirm=false;ruleOpenId=rule.id;grammarQuiz=null;page='rules';
    save();render();notify('Правило сохранено');return;
