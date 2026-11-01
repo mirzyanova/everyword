@@ -321,25 +321,110 @@ function shelfEditor(){
  '</section></div>';
 }
 
+
+function ruleRich(value){
+ // Escape untrusted educational content first, then support restrained typographic emphasis.
+ return safe(value).replace(/\*\*([^*\n]{1,240})\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+}
+function ruleFocus(sentence,focus){
+ const text=String(sentence||''),phrase=String(focus||'').trim();
+ if(!phrase)return safe(text);
+ const index=text.toLocaleLowerCase().indexOf(phrase.toLocaleLowerCase());
+ if(index<0)return safe(text);
+ return safe(text.slice(0,index))+'<strong class="rule-highlight">'+safe(text.slice(index,index+phrase.length))+'</strong>'+safe(text.slice(index+phrase.length));
+}
+function ruleReferenceTable(rule){
+ const rows=Array.isArray(rule.reference)?rule.reference.filter(x=>x&&typeof x==='object'&&(x.label||x.meaning||x.pattern)):[];
+ if(!rows.length)return '';
+ const headingText=String(rule.referenceTitle||'Формула и основные конструкции');
+ const single=rows.length===1;
+ return '<section class="rule-section rule-reference" aria-label="'+safe(headingText)+'">'+
+ '<div class="rule-section-eyebrow">02 / ОСНОВА</div><h2>'+safe(headingText)+'</h2>'+
+ (single?'<div class="rule-formula-large"><strong>'+ruleRich(rows[0].pattern||rows[0].label||'')+'</strong>'+
+ (rows[0].meaning?'<p>'+ruleRich(rows[0].meaning)+'</p>':'')+
+ (rows[0].note?'<div class="rule-note">'+ruleRich(rows[0].note)+'</div>':'')+'</div>':
+ '<div class="rule-table-wrap"><table class="rule-matrix rule-ref-table"><thead><tr><th scope="col">Конструкция</th><th scope="col">Значение</th><th scope="col">Формула / структура</th></tr></thead><tbody>'+
+ rows.map(row=>'<tr><th scope="row"><span class="rule-matrix-main">'+ruleRich(row.label||'')+'</span></th>'+
+ '<td data-label="Значение">'+ruleRich(row.meaning||'')+(row.note?'<div class="rule-cell-note">'+ruleRich(row.note)+'</div>':'')+'</td>'+
+ '<td data-label="Формула">'+(row.pattern?'<span class="rule-pattern">'+ruleRich(row.pattern)+'</span>':'—')+'</td></tr>').join('')+
+ '</tbody></table></div>')+'</section>';
+}
+function ruleSectionMarkup(section,index){
+ if(!section||typeof section!=='object')return '';
+ const title=String(section.title||'Дополнительно');
+ const intro='<section class="rule-section rule-extra"><div class="rule-section-eyebrow">'+String(index+1).padStart(2,'0')+' / ПОДРОБНЕЕ</div><h2>'+safe(title)+'</h2>';
+ if(['table','comparison'].includes(section.type)&&Array.isArray(section.rows)){
+  const cols=Array.isArray(section.columns)?section.columns.slice(0,4):[];
+  const rows=section.rows.filter(x=>Array.isArray(x));
+  if(!rows.length)return '';
+  return intro+'<div class="rule-table-wrap"><table class="rule-matrix rule-extra-table">'+
+   (cols.length?'<thead><tr>'+cols.map(c=>'<th scope="col">'+ruleRich(c)+'</th>').join('')+'</tr></thead>':'')+
+   '<tbody>'+rows.map(row=>'<tr>'+row.slice(0,Math.max(cols.length,2)).map((cell,i)=>
+    '<td data-label="'+safe(cols[i]||'')+'"'+(i===0?' class="rule-first-cell"':'')+'>'+ruleRich(cell)+'</td>').join('')+'</tr>').join('')+
+   '</tbody></table></div>'+
+   (section.note?'<p class="rule-small-note">'+ruleRich(section.note)+'</p>':'')+'</section>';
+ }
+ if(section.type==='mistakes'&&Array.isArray(section.items)){
+  return intro+'<div class="rule-mistakes">'+section.items.filter(x=>x&&(x.wrong||x.right)).map(x=>
+   '<div class="rule-mistake"><div class="rule-mistake-pair"><div><span class="rule-status wrong">Не так</span><p>'+ruleRich(x.wrong||'')+'</p></div>'+
+   '<div><span class="rule-status correct">Правильно</span><p>'+ruleRich(x.right||'')+'</p></div></div>'+
+   (x.why?'<p class="rule-mistake-why">'+ruleRich(x.why)+'</p>':'')+'</div>').join('')+'</div></section>';
+ }
+ if(['list','bullets'].includes(section.type)&&Array.isArray(section.items)){
+  return intro+'<div class="rule-points">'+section.items.map(x=>{
+   const label=typeof x==='string'?'':String(x?.label||'');
+   const text=typeof x==='string'?x:String(x?.text||'');
+   return '<div class="rule-point">'+(label?'<strong>'+ruleRich(label)+'</strong>':'')+'<p>'+ruleRich(text)+'</p></div>';
+  }).join('')+'</div></section>';
+ }
+ if(section.type==='formula'&&Array.isArray(section.items)){
+  return intro+'<div class="rule-formula-list">'+section.items.map(x=>
+   '<div class="rule-formula-row"><span>'+ruleRich(x.label||'')+'</span><strong>'+ruleRich(x.formula||'')+'</strong>'+
+   (x.note?'<p>'+ruleRich(x.note)+'</p>':'')+'</div>').join('')+'</div></section>';
+ }
+ if(section.type==='text'||typeof section.body==='string'){
+  return intro+'<div class="rule-prose">'+ruleRich(section.body||'')+'</div></section>';
+ }
+ return '';
+}
+function ruleLegacyDetails(explanation){
+ const raw=String(explanation||'').trim();
+ if(!raw)return '';
+ const paras=raw.split(/\n\s*\n/).filter(Boolean);
+ return '<section class="rule-section rule-extra rule-legacy"><div class="rule-section-eyebrow">ПОДРОБНЕЕ</div><h2>Дополнительные пояснения</h2>'+
+ paras.map(p=>{
+  const lines=p.split('\n');
+  const title=lines[0];
+  const headingLike=/^(?:[1-9][\d]*[.)]\s|ШАГ\s*\d|[А-ЯЁ][А-ЯЁ\s/—-]{6,}:?|Типичные ошибки|Отрицательн|КОГДА\s)/i.test(title);
+  return '<div class="rule-legacy-paragraph">'+(headingLike?'<h3>'+ruleRich(title)+'</h3>'+lines.slice(1).map(x=>'<p>'+ruleRich(x)+'</p>').join(''):'<p>'+ruleRich(p)+'</p>')+'</div>';
+ }).join('')+'</section>';
+}
 function rulePage(){
  if(grammarQuiz)return ruleQuizPage();
  const rule=activeRules().find(r=>r.id===ruleOpenId);
  if(rule){
-  const examples=Array.isArray(rule.examples)?rule.examples:[];
+  const examples=Array.isArray(rule.examples)?rule.examples.filter(x=>x&&x.en):[];
   const questions=Array.isArray(rule.questions)?rule.questions.filter(q=>q&&Array.isArray(q.options)&&q.options.length>=3&&Number.isInteger(q.correctIndex)&&q.correctIndex>=0&&q.correctIndex<q.options.length):[];
+  const hasSections=Array.isArray(rule.sections)&&rule.sections.length>0;
+  const overview=String(rule.overview||rule.summary||rule.explanation?.split(/\n\n/)[0]||'').trim();
+  const reference=ruleReferenceTable(rule);
+  const lead='<section class="rule-section rule-overview"><div class="rule-section-eyebrow">01 / ГЛАВНОЕ</div>'+
+   '<h2>Общее правило</h2><p>'+ruleRich(overview)+'</p></section>';
+  const ex='<section class="rule-section rule-examples-section"><div class="rule-section-eyebrow">03 / ПРИМЕРЫ</div><h2>Примеры употребления</h2>'+
+   '<div class="rule-example-list">'+examples.map(item=>'<div class="rule-example-row"><div class="rule-example-en">'+ruleFocus(item.en,item.focus)+'</div>'+
+   '<div class="rule-example-ru">'+ruleRich(item.ru||'')+'</div></div>').join('')+'</div></section>';
+  const details=hasSections?rule.sections.map((section,i)=>ruleSectionMarkup(section,i+3)).join(''):ruleLegacyDetails(rule.explanation);
   return '<div class="rule-back"><button class="link" data-action="rule-back">← Все правила</button></div>'+
-   heading('МОЙ СПРАВОЧНИК',safe(rule.title),safe(rule.summary||''))+
-   '<article class="panel rule-detail"><div class="eyebrow">ОБЪЯСНЕНИЕ</div><div class="rule-explanation">'+safe(rule.explanation||'Правило пока без объяснения.').replace(/\n/g,'<br>')+'</div>'+
-   (examples.length?'<h2>Примеры</h2><div class="rule-examples">'+examples.map(item=>'<div class="rule-example"><strong>'+safe(item.en||'')+'</strong><span>'+safe(item.ru||'')+'</span></div>').join('')+'</div>':'')+
-   '</article>'+
-   '<section class="panel rule-practice-card"><div class="eyebrow">ЗАКРЕПИТЬ ПРАВИЛО</div><h2>Составить упражнения</h2><p class="muted">'+(questions.length?'Подготовлено '+questions.length+' вопросов с похожими вариантами и пояснением после ответа. При новом запуске порядок меняется.':'Для этого правила ещё нет подготовленных заданий. Попроси ChatGPT дополнить правило 5–7 вопросами.')+'</p>'+
+  '<header class="rule-article-header"><div class="eyebrow">МОЙ ГРАММАТИЧЕСКИЙ СПРАВОЧНИК</div><h1>'+safe(rule.title)+'</h1></header>'+
+  '<article class="rule-article">'+lead+reference+(examples.length?ex:'')+(details?'<div class="rule-more-divider"><span>Нюансы и дополнительные случаи</span></div>'+details:'')+'</article>'+
+  '<section class="rule-practice-cta"><div><div class="eyebrow">ПРОВЕРЬ СЕБЯ</div><h2>Упражнения по правилу</h2><p>'+ (questions.length?'Подготовлено '+questions.length+' заданий с объяснениями после ответа.':'Пока нет подготовленных заданий. Их можно добавить через ChatGPT.')+'</p></div>'+
    '<button class="primary" data-action="rule-practice" data-id="'+safe(rule.id)+'" '+(!questions.length?'disabled':'')+'>Начать упражнения →</button></section>'+
-   '<div class="rule-footer-actions"><button class="secondary" data-action="rule-edit" data-id="'+safe(rule.id)+'">Редактировать правило</button><button class="link" data-action="rule-back">Вернуться к правилам</button></div>';
+  '<div class="rule-footer-actions"><button class="secondary" data-action="rule-edit" data-id="'+safe(rule.id)+'">Редактировать правило</button><button class="link" data-action="rule-back">К списку правил</button></div>';
  }
  const list=activeRules().slice().sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
  return heading('МОЯ ГРАММАТИКА','Правила','Место для грамматики, которую ты уже разобрала. Вернись к объяснению в любой момент и потренируйся на примерах.')+
   '<div class="shelf-toolbar"><span class="muted">Сохранено правил: '+list.length+'</span><button class="primary" data-action="rule-new">＋ Добавить правило</button></div>'+
-  (list.length?'<div class="rule-grid">'+list.map(r=>'<article class="rule-tile"><div class="rule-tile-icon">'+navIcon('rules')+'</div><h2>'+safe(r.title)+'</h2><p>'+safe(r.summary||'Короткое объяснение и примеры')+'</p><div class="rule-tile-actions"><button class="secondary" data-action="rule-open" data-id="'+safe(r.id)+'">Открыть правило →</button></div></article>').join('')+'</div>':
+  (list.length?'<div class="rule-grid">'+list.map(r=>'<article class="rule-tile"><div class="rule-tile-icon">'+navIcon('rules')+'</div><h2>'+safe(r.title)+'</h2><p>'+safe(r.summary||r.overview||'Короткое объяснение и примеры')+'</p><div class="rule-tile-actions"><button class="secondary" data-action="rule-open" data-id="'+safe(r.id)+'">Открыть правило →</button></div></article>').join('')+'</div>':
   '<div class="shelf-welcome"><div class="shelf-welcome-icon" aria-hidden="true">▤</div><h2>Собирай правила в одном месте</h2><p>Обсуди грамматику с ChatGPT и попроси добавить правило в Everyword. Или сохрани объяснение самостоятельно.</p><button class="primary" data-action="rule-new">Добавить первое правило</button></div>')+
   '<p class="rule-help muted">Правила синхронизируются с твоим аккаунтом. Упражнения можно добавлять к правилам из ChatGPT без ручного копирования.</p>';
 }
