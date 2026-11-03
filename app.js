@@ -75,6 +75,10 @@ function notify(s){toastEl.textContent=s;toastEl.style.display='block';clearTime
 function today(){const d=now();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
 function daily(c){return (c.history||[]).filter(x=>localDay(x.at)===today())}
 const MAX_PRACTICE_WORDS=30;
+function wordCount(n){
+ const lastTwo=n%100,last=n%10;
+ return n+' '+(lastTwo>=11&&lastTwo<=14?'слов':last===1?'слово':last>=2&&last<=4?'слова':'слов');
+}
 function dailyReview(){return dailyReviewSelection(activeCards(),today(),10)}
 function activeCards(){return state.cards.filter(c=>!c.deletedAt)}
 function completedPractices(){return Array.isArray(state.practices)?state.practices:[]}
@@ -254,11 +258,13 @@ function nextPraise(){
 }
 function home(){
  const s=stats(),streak=streakDays(),group=latestAddedGroup();
+ const pendingNew=group.cards.filter(c=>!hasScheduledToday(c,today()));
+ const newBatchCount=Math.min(MAX_PRACTICE_WORDS,(pendingNew.length?pendingNew:group.cards).length);
  return '<div class="streak-strip"><span class="streak-flame" aria-hidden="true">✦</span><div><strong>'+streak+' '+(streak===1?'день':streak%10>=2&&streak%10<=4&&(streak%100<12||streak%100>14)?'дня':'дней')+' подряд</strong><span>без пропусков занятий</span></div></div>'+
  '<section class="home-heading"><div class="eyebrow">Личное пространство</div><h1 class="home-title"><span class="home-title-lead">Английский,</span><span class="home-title-tail">в своём ритме</span></h1><p class="muted home-subtitle">Все слова в одном месте. Возвращайся к ним на пути к европейскому паспорту.</p><span class="home-sun" aria-hidden="true"></span></section>'+
  '<div class="stats"><div class="stat"><span>В коллекции</span><b>'+s.all+'</b><span>слов и выражений</span></div><div class="stat"><span>Последнее пополнение</span><b>'+group.cards.length+'</b><span>для нового занятия</span></div><div class="stat"><span>Сложные слова</span><b>'+s.hard+'</b><span>для повторения</span></div></div>'+
- '<section class="new-words-hero practice-with-info">'+modeInfo('new')+'<div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day,group.cards)+' · '+Math.min(MAX_PRACTICE_WORDS,group.cards.length)+' слов за занятие+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
- '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?Math.min(MAX_PRACTICE_WORDS,s.due)+' слов за занятие'+(s.due>MAX_PRACTICE_WORDS?' · потом можно продолжить':''):'На сегодня всё повторено')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
+ '<section class="new-words-hero practice-with-info">'+modeInfo('new')+'<div class="eyebrow">НОВОЕ ЗАНЯТИЕ</div><h2>Новые слова</h2><div class="new-group-note">'+dateLabel(group.day,group.cards)+' · '+wordCount(newBatchCount)+' за занятие+'</div><button class="primary" data-action="begin" '+(!group.cards.length?'disabled':'')+'>Начать занятие →</button></section>'+
+ '<section class="due-words-hero practice-with-info">'+modeInfo('due')+'<div><div class="eyebrow">ЗАКРЕПЛЕНИЕ ПО ДНЯМ + FSRS</div><h2>Повторить сегодня</h2><p class="muted">'+(s.due?wordCount(Math.min(MAX_PRACTICE_WORDS,s.due))+' за занятие'+(s.due>MAX_PRACTICE_WORDS?' · потом можно продолжить':''):'На сегодня всё повторено')+'</p></div><button class="secondary" data-action="due" '+(!s.due?'disabled':'')+'>Повторить →</button></section>'+
  '<div class="practice-mode-grid"><section class="practice-mode-card practice-with-info">'+modeInfo('free')+'<div class="eyebrow">30 СЛОВ ЗА ЗАНЯТИЕ</div><h2>Свободная практика</h2><p>30 случайных слов из коллекции. Каждая практика заканчивается.</p><button class="secondary" data-action="practice" '+(!s.all?'disabled':'')+'>Практиковаться →</button></section><section class="practice-mode-card practice-hard practice-with-info">'+modeInfo('hard')+'<div class="eyebrow">ТОЧКА РОСТА</div><h2>Сложные слова</h2><p>Слова, которые потребовали дополнительных попыток. До 30 за занятие.</p><button class="secondary" data-action="hard" '+(!s.hard?'disabled':'')+'>Повторить сложные →</button></section></div>'+
  '<section class="wordex-home-link"><div><div class="eyebrow">СЛОВА В КОНТЕКСТЕ</div><h2>Упражнения со словами</h2><p>10 предложений с пропусками из выбранной группы слов.</p></div><button class="secondary" data-page="word-exercises">Попробовать →</button></section>'+
  '<footer class="joke-footer"><span class="joke-label">АНЕКДОТ ОТ НИКУЛИНА</span><p class="joke-body">'+jokeMarkup()+'</p><button class="joke-next" type="button" data-action="next-joke" aria-label="Показать другой анекдот">Другой анекдот ↻</button></footer>';
@@ -271,7 +277,7 @@ function study(){
  if(!c||!task){
    const completed=!!lesson?.completed;
    const remaining=completed?(lesson.kind==='due'?dailyReview().cards.length:lesson.kind==='new'?latestAddedGroup().cards.filter(c=>!hasScheduledToday(c,today())).length:lesson.kind==='hard'?activeCards().filter(c=>c.difficult&&!hasScheduledToday(c,today())).length:lesson.kind==='shelf'?activeCards().filter(c=>activeShelves().find(sh=>sh.id===lesson.shelfId)?.cardIds.includes(c.id)&&!hasScheduledToday(c,today())).length:0):0;
-   const continuation=remaining>0&&['due','new','hard','shelf'].includes(lesson.kind)?'<button class="secondary" data-action="'+(lesson.kind==='new'?'begin':lesson.kind==='shelf'?'shelf-start':lesson.kind)+'" '+(lesson.kind==='shelf'?'data-id="'+safe(lesson.shelfId)+'"':'')+'>'+(remaining>=MAX_PRACTICE_WORDS?'Следующие 30 слов →':'Ещё '+remaining+' слов →')+'</button>':'';
+   const continuation=remaining>0&&['due','new','hard','shelf'].includes(lesson.kind)?'<button class="secondary" data-action="'+(lesson.kind==='new'?'begin':lesson.kind==='shelf'?'shelf-start':lesson.kind)+'" '+(lesson.kind==='shelf'?'data-id="'+safe(lesson.shelfId)+'"':'')+'>'+(remaining>=MAX_PRACTICE_WORDS?'Следующие 30 слов →':'Ещё '+wordCount(remaining)+' →')+'</button>':'';
    return heading('МОЁ ЗАНЯТИЕ',label,completed?'Практика завершена. Результат сохранён.':'В этом режиме пока нет слов.')+
    '<div class="panel study-finished"><h2>'+(completed?'Занятие завершено':'На сейчас всё!')+'</h2>'+
    (completed&&lesson.praise?'<p class="study-praise">'+safe(lesson.praise)+'</p>':'')+
