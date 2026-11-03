@@ -46,6 +46,7 @@ export function dailyReviewSelection(cards,day,olderCount=10){
     const scheduled=!!c.fsrs?.due&&localDay(c.fsrs.due)<=day;
     const calendar=!isNew&&eligibleByCalendar(c,day);
     if(isNew||hard||scheduled||calendar){
+      if(hasScheduledToday(c,day))continue;
       required.push(c);
       if(isNew)reasons.new++;
       if(hard)reasons.hard++;
@@ -56,13 +57,13 @@ export function dailyReviewSelection(cards,day,olderCount=10){
   // Supplement with older items even when their FSRS next due is further away.
   // Prefer items not seen today, then those not seen for the longest period.
   remaining.sort((a,b)=>{
-    const da=distinctStudyDays(a).at(-1)||'',db=distinctStudyDays(b).at(-1)||'';
-    const seenA=da===day?1:0,seenB=db===day?1:0;
-    if(seenA!==seenB)return seenA-seenB;
+    // Ignore reviews from today so older additions are not refilled after every batch.
+    const da=distinctStudyDays(a).filter(d=>d<day).at(-1)||'';
+    const db=distinctStudyDays(b).filter(d=>d<day).at(-1)||'';
     if(da!==db)return da.localeCompare(db);
     return String(a.id).localeCompare(String(b.id));
   });
-  const extra=remaining.slice(0,Math.max(0,olderCount));
+  const extra=remaining.slice(0,Math.max(0,olderCount)).filter(c=>!hasScheduledToday(c,day));
   reasons.older=extra.length;
   return {cards:[...required,...extra],required:required.length,reasons};
 }
