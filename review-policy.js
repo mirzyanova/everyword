@@ -40,8 +40,6 @@ export function dailyReviewSelection(cards,day,olderCount=10){
   const required=[],remaining=[];
   const reasons={new:0,hard:0,scheduled:0,calendar:0,older:0};
   for(const c of active){
-    // Already completed today: no repeat in subsequent daily batches.
-    if(hasScheduledToday(c,day))continue;
     const isNew=!c.fsrs;
     const hard=c.difficult===true;
     // Every card with an FSRS due date on this or a previous calendar day.
